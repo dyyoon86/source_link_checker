@@ -1,0 +1,64 @@
+{
+  "env": { "name": "", "tag": "", "color": "gray" },
+  "web": { "port": 8095 },
+  "ssh": { "connectTimeoutSec": 6, "execTimeoutSec": 10 },
+  "monitor": {
+    "_comment": "서버 상시 주기 점검. enabled=true 면 브라우저 없이도 intervalSec 마다 SSH 점검하고, 상태변화 시 alarmDir 에 alarm-YYYYMMDD.log 로 기록. businesses 를 비우면 전체 업무.",
+    "enabled": false,
+    "intervalSec": 60,
+    "alarmDir": "alarms",
+    "businesses": []
+  },
+  "_comment": "원천사 출처는 업무별로 3가지 중 하나. 우선순위: sourcesFile(외부파일 주입) > sources(config 직접 내장) > oracle.sourcesSql(DB). FEP처럼 DB 접속이 안 되는 서버는 sourcesFile/sources 를 사용하세요.",
+  "_endpoint_comment": "한 원천사가 여러 아웃바운드 세션(이중화)을 가지면 endpoints 배열에 {label,sendip,sendport,recvport} 를 여러 개 넣으세요. endpoints 를 안 쓰면 flat 한 sendip/sendport/recvport 로 단일 세션 처리(하위호환).",
+  "businesses": [
+    {
+      "id": "firm",
+      "name": "펌뱅킹",
+      "_note": "(a) 외부 파일 주입 방식. sourcesFile 은 config 폴더 기준 상대경로 또는 절대경로. 재갱신 시 파일을 다시 읽으므로 재시작 불필요.",
+      "sourcesFile": "sources-firm.json",
+      "servers": [
+        { "id": "FIRM-1", "host": "10.7.1.10", "sshPort": 22, "user": "root", "password": "pw1" }
+      ]
+    },
+    {
+      "id": "va",
+      "name": "가상계좌",
+      "_note": "(b) config 직접 내장 방식. 송신(sends)/수신(recvs) 분리. 002 은행은 송신 이중화 + 수신 1포트 예시.",
+      "sources": [
+        {
+          "id": "001",
+          "name": "신한은행",
+          "sends": [ { "label": "", "sendip": "211.10.0.1", "sendport": "7001", "checkMode": "session", "expectSend": 1 } ],
+          "recvs": [ { "label": "", "recvport": "9001", "expectRecv": 0 } ]
+        },
+        {
+          "id": "002",
+          "name": "국민은행 (송신 이중화)",
+          "sends": [
+            { "label": "주센터", "sendip": "211.10.0.2", "sendport": "7002", "checkMode": "session", "expectSend": 1 },
+            { "label": "재해센터", "sendip": "222.20.0.2", "sendport": "7002", "checkMode": "session", "expectSend": 1 }
+          ],
+          "recvs": [ { "label": "수신", "recvport": "9002", "expectRecv": 2 } ]
+        }
+      ],
+      "servers": [
+        { "id": "VA-1", "host": "10.7.2.10", "sshPort": 22, "user": "root", "password": "pw1" }
+      ]
+    },
+    {
+      "id": "legacy",
+      "name": "레거시(DB)",
+      "_note": "(c) 기존 DB 조회 방식(참고). sourcesSql 은 id,name,sendip,sendport,recvport (선택 label) alias 반환. 같은 id 가 여러 행이면 이중화 엔드포인트로 자동 합쳐짐.",
+      "oracle": {
+        "url": "jdbc:oracle:thin:@10.0.0.10:1521:ORCL",
+        "user": "myuser",
+        "password": "mypassword",
+        "sourcesSql": "SELECT SRC_ID AS id, SRC_NAME AS name, SEND_IP AS sendip, SEND_PORT AS sendport, RECV_PORT AS recvport FROM TB_FIRM_SOURCE ORDER BY SRC_NAME"
+      },
+      "servers": [
+        { "id": "LEG-1", "host": "10.7.3.10", "sshPort": 22, "user": "root", "password": "pw1" }
+      ]
+    }
+  ]
+}

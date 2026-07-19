@@ -1,0 +1,19 @@
+{
+  "_comment": "운영 펌뱅킹 원천사 목록. 실제 값으로 채운 뒤 웹에서 '재갱신' 하세요. (아래는 형식 예시)",
+  "sources": [
+    {
+      "id": "001",
+      "name": "예시은행",
+      "sendip": "0.0.0.0", "sendport": "0", "recvport": "0"
+    },
+    {
+      "id": "002",
+      "name": "예시은행(이중화)",
+      "recvport": "0",
+      "endpoints": [
+        { "label": "1번회선", "sendip": "0.0.0.0", "sendport": "0" },
+        { "label": "2번회선", "sendip": "0.0.0.0", "sendport": "0" }
+      ]
+    }
+  ]
+}

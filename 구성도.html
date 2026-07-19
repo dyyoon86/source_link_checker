@@ -1,0 +1,274 @@
+<title>원천사 연결 점검 시스템 구성도</title>
+<style>
+  :root{
+    --bg:#FAFAFB; --surface:#FFFFFF; --surface-2:#F4F5F7; --line:#E5E5E8;
+    --text:#17181A; --sub:#454545; --muted:#8A8F98;
+    --orange:#F85100; --orange-2:#FF6114; --orange-soft:#FFEFE7; --orange-line:#FFCFBD;
+    --green:#187D3A; --green-soft:#EAF6EE; --green-line:#BDE7CB;
+    --blue:#1B4DF5; --blue-soft:#EAF1FF; --blue-line:#BCD5FF;
+    --red:#D10505; --red-soft:#FDECEC; --red-line:#F5C6C6;
+    --mono:"JetBrains Mono","D2Coding",ui-monospace,Consolas,monospace;
+    --sans:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo",
+           "Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+    --radius:14px; --shadow:0 1px 2px rgba(20,22,26,.04),0 8px 24px rgba(20,22,26,.05);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0D1117; --surface:#161B22; --surface-2:#1B2230; --line:#2A3341;
+      --text:#E6EDF3; --sub:#B7C0CB; --muted:#8B98A5;
+      --orange:#FF7A3C; --orange-2:#FF6114; --orange-soft:#2A1710; --orange-line:#6E3417;
+      --green:#5EDC7E; --green-soft:#12281B; --green-line:#1E5631;
+      --blue:#7AA2FF; --blue-soft:#141E38; --blue-line:#26407A;
+      --red:#FF7A75; --red-soft:#2C1413; --red-line:#5E2320;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#FAFAFB; --surface:#FFFFFF; --surface-2:#F4F5F7; --line:#E5E5E8;
+    --text:#17181A; --sub:#454545; --muted:#8A8F98;
+    --orange:#F85100; --orange-soft:#FFEFE7; --orange-line:#FFCFBD;
+    --green:#187D3A; --green-soft:#EAF6EE; --green-line:#BDE7CB;
+    --blue:#1B4DF5; --blue-soft:#EAF1FF; --blue-line:#BCD5FF;
+    --red:#D10505; --red-soft:#FDECEC; --red-line:#F5C6C6;
+    --shadow:0 1px 2px rgba(20,22,26,.04),0 8px 24px rgba(20,22,26,.05);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1117; --surface:#161B22; --surface-2:#1B2230; --line:#2A3341;
+    --text:#E6EDF3; --sub:#B7C0CB; --muted:#8B98A5;
+    --orange:#FF7A3C; --orange-soft:#2A1710; --orange-line:#6E3417;
+    --green:#5EDC7E; --green-soft:#12281B; --green-line:#1E5631;
+    --blue:#7AA2FF; --blue-soft:#141E38; --blue-line:#26407A;
+    --red:#FF7A75; --red-soft:#2C1413; --red-line:#5E2320;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
+    letter-spacing:-.01em;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:840px;margin:0 auto;padding:40px 20px 72px;}
+
+  header{margin-bottom:8px;}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--orange);}
+  h1{font-size:26px;font-weight:800;letter-spacing:-.03em;margin:8px 0 6px;text-wrap:balance;}
+  .lede{color:var(--sub);font-size:14px;max-width:60ch;}
+
+  .diagram{margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:0;}
+
+  /* 노드 카드 */
+  .node{width:100%;max-width:560px;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;position:relative;}
+  .node.ours{border-color:var(--orange-line);}
+  .node.ours::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:4px;
+    border-radius:4px;background:var(--orange);}
+  .node.ours{padding-left:22px;}
+  .node .row1{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .node .title{font-size:16px;font-weight:800;letter-spacing:-.02em;}
+  .node .badge{font-size:10.5px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:999px;text-transform:uppercase;}
+  .badge.new{background:var(--orange-soft);color:var(--orange);border:1px solid var(--orange-line);}
+  .badge.ext{background:var(--surface-2);color:var(--muted);border:1px solid var(--line);}
+  .node .ports{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--sub);
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:3px 9px;white-space:nowrap;}
+  .node .desc{margin-top:7px;color:var(--sub);font-size:13px;}
+  .chips{margin-top:9px;display:flex;flex-wrap:wrap;gap:6px;}
+  .chip{font-size:11.5px;font-weight:600;color:var(--sub);background:var(--surface-2);
+    border:1px solid var(--line);border-radius:7px;padding:3px 8px;}
+  .chip.mono{font-family:var(--mono);}
+
+  /* 커넥터 (세로선 + 라벨) */
+  .conn{display:flex;flex-direction:column;align-items:center;width:100%;}
+  .conn .line{width:2px;height:16px;background:var(--edge,var(--line));}
+  .conn .pill{font-size:11px;font-weight:700;padding:3px 11px;border-radius:999px;
+    border:1px solid var(--edge-line,var(--line));background:var(--edge-soft,var(--surface-2));
+    color:var(--edge,var(--sub));white-space:nowrap;display:flex;align-items:center;gap:6px;}
+  .conn .pill .dir{font-family:var(--mono);opacity:.8;}
+  .conn.o{--edge:var(--orange);--edge-soft:var(--orange-soft);--edge-line:var(--orange-line);}
+  .conn.g{--edge:var(--green);--edge-soft:var(--green-soft);--edge-line:var(--green-line);}
+  .conn.b{--edge:var(--blue);--edge-soft:var(--blue-soft);--edge-line:var(--blue-line);}
+  .conn.n{--edge:var(--sub);--edge-soft:var(--surface-2);--edge-line:var(--line);}
+
+  /* 분기 (DB + 서버) */
+  .branch{width:100%;max-width:560px;display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:560px){.branch{grid-template-columns:1fr;}}
+  .branch .node{max-width:none;}
+  .branch-tags{width:100%;max-width:560px;display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:2px;}
+  @media(max-width:560px){.branch-tags{grid-template-columns:1fr;}}
+  .btag{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .btag .line{width:2px;height:14px;}
+  .btag .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;text-align:center;}
+  .btag.b .pill{background:var(--blue-soft);color:var(--blue);border:1px solid var(--blue-line);}
+  .btag.b .line{background:var(--blue);}
+  .btag.g .pill{background:var(--green-soft);color:var(--green);border:1px solid var(--green-line);}
+  .btag.g .line{background:var(--green);}
+
+  /* 감시 대상 세션 (원천사) */
+  .watch{width:100%;max-width:560px;}
+  .node.watch-node{border-color:var(--red-line);background:linear-gradient(0deg,var(--surface),var(--surface));}
+  .node.watch-node .title{color:var(--text);}
+  .sess-note{margin-top:9px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--red);font-weight:700;}
+  .sess-note .dot{width:8px;height:8px;border-radius:99px;background:var(--red);flex:none;}
+
+  /* 사이드 주석 (브라우저) */
+  .side{width:100%;max-width:560px;display:flex;justify-content:flex-end;margin:-4px 0 -2px;}
+  .side .tab{font-size:11.5px;color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:5px 10px;background:var(--surface);}
+  .side .tab b{color:var(--sub);}
+
+  /* 범례 */
+  .legend{margin-top:34px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:16px 18px;}
+  .legend h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;font-weight:800;}
+  .legend .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 20px;}
+  .leg{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub);}
+  .leg .sw{width:22px;height:3px;border-radius:3px;flex:none;}
+  .leg .sw.o{background:var(--orange);} .leg .sw.g{background:var(--green);}
+  .leg .sw.b{background:var(--blue);} .leg .sw.n{background:var(--muted);}
+  .leg .sw.r{background:var(--red);}
+  .leg b{color:var(--text);font-weight:700;}
+
+  .foot{margin-top:22px;display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);}
+  .foot .k{display:inline-flex;align-items:center;gap:7px;}
+  .env-dot{width:9px;height:9px;border-radius:99px;display:inline-block;}
+  .env-dot.p{background:var(--red);} .env-dot.t{background:var(--blue);}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">System Architecture</div>
+    <h1>원천사 연결 점검 시스템 구성도</h1>
+    <p class="lede">AI 채팅으로 물어보면 → 에이전트가 점검 도구를 호출 → 관리 서버에 SSH로 접속해
+      원천사와의 <b>송신·수신 세션</b>이 살아있는지 확인해 돌려줍니다.</p>
+  </header>
+
+  <div class="diagram">
+
+    <!-- 사용자 -->
+    <div class="node ext">
+      <div class="row1"><span class="title">운영자 · AI 채팅</span>
+        <span class="badge ext">외부</span></div>
+      <div class="desc">자연어로 질문 — “펌뱅킹 금융결제원 연결 상태 알려줘”, “가상계좌 전체 확인”</div>
+    </div>
+
+    <div class="conn n"><span class="line"></span><span class="pill">질의 (자연어)</span><span class="line"></span></div>
+
+    <!-- Master -->
+    <div class="node ext">
+      <div class="row1"><span class="title">Master Agent</span>
+        <span class="badge ext">기존 인프라</span>
+        <span class="ports">192.168.99.34:5000</span></div>
+      <div class="desc">SmartRouter(LLM)가 질문을 분석해 적합한 Agent·Skill 선택 → A2A 호출 → 결과를 최종 응답으로 정리</div>
+    </div>
+
+    <div class="conn o">
+      <span class="line"></span>
+      <span class="pill"><span class="dir">A2A ↓</span> JSON-RPC 2.0</span>
+      <span class="line"></span>
+    </div>
+
+    <!-- SourceLinkAgent (신규) -->
+    <div class="node ours">
+      <div class="row1"><span class="title">SourceLinkAgent</span>
+        <span class="badge new">신규</span>
+        <span class="ports">운영 :20001 · 테스트 :20002</span></div>
+      <div class="desc">순수 Java 1.8 무의존 Sub-Agent. Master의 A2A 질의를 받아 점검 도구 API를 호출하고 한글 요약으로 응답.</div>
+      <div class="chips">
+        <span class="chip">skill: check_link</span>
+        <span class="chip">skill: list_sources</span>
+        <span class="chip">/.well-known/agent.json</span>
+        <span class="chip">/a2a</span>
+        <span class="chip">/health</span>
+        <span class="chip">60초 자동등록 ↑</span>
+      </div>
+    </div>
+
+    <div class="conn n">
+      <span class="line"></span>
+      <span class="pill"><span class="dir">HTTP ↓</span> /api/sources · /api/check · /api/checkall</span>
+      <span class="line"></span>
+    </div>
+
+    <!-- 브라우저 사이드 주석 -->
+    <div class="side"><div class="tab">🖥 <b>브라우저</b> → 웹 UI (단건 · 전체 · 조회 이력 · 자동점검)</div></div>
+
+    <!-- source-link-checker (기존, 우리 것) -->
+    <div class="node ours">
+      <div class="row1"><span class="title">source-link-checker</span>
+        <span class="badge new">기존 도구</span>
+        <span class="ports">운영 :8096 · 테스트 :8095</span></div>
+      <div class="desc">순수 Java 1.8 점검 도구. 웹 UI + REST API 제공. 원천사 정보는 캐시로 두고, SSH 세션은 풀에 재사용.</div>
+      <div class="chips">
+        <span class="chip">웹 UI</span>
+        <span class="chip mono">*.cache.json</span>
+        <span class="chip mono">*.history.json</span>
+        <span class="chip">SSH 세션풀</span>
+        <span class="chip">업무: 펌뱅킹 · 가상계좌</span>
+      </div>
+    </div>
+
+    <!-- 분기 라벨 -->
+    <div class="branch-tags">
+      <div class="btag b"><span class="line"></span>
+        <span class="pill">JDBC · 원천사 조회<br><span style="font-weight:600;opacity:.85">최초/재갱신 시 1회</span></span></div>
+      <div class="btag g"><span class="line"></span>
+        <span class="pill">SSH · 세션풀 재사용<br><span style="font-weight:600;opacity:.85">ss / netstat</span></span></div>
+    </div>
+
+    <!-- 분기: DB + 서버 -->
+    <div class="branch">
+      <div class="node ext">
+        <div class="row1"><span class="title">Oracle DB</span></div>
+        <div class="desc">원천사 접속정보(IP·송신포트·수신포트) 보관</div>
+        <div class="chips">
+          <span class="chip mono">FIRMDB (펌뱅킹)</span>
+          <span class="chip mono">VADB (가상계좌)</span>
+        </div>
+      </div>
+      <div class="node ext">
+        <div class="row1"><span class="title">관리 서버 (업무별 N대)</span></div>
+        <div class="desc">내가 관리하는 3세대 서버. ss/netstat 로 세션 조회</div>
+        <div class="chips">
+          <span class="chip mono">FIRM-1 · 2 · 3</span>
+          <span class="chip mono">VA-1 · 2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 서버 → 원천사 -->
+    <div style="width:100%;max-width:560px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div></div>
+      <div class="conn" style="--edge:var(--red);--edge-soft:var(--red-soft);--edge-line:var(--red-line);">
+        <span class="line" style="background:var(--red)"></span>
+      </div>
+    </div>
+
+    <!-- 원천사 (감시 대상) -->
+    <div class="watch">
+      <div class="node watch-node">
+        <div class="row1"><span class="title">원천사 (외부 연동사)</span>
+          <span class="badge ext">외부</span></div>
+        <div class="desc">금융결제원(KFTC) · 나이스 · KSNET · 가상은행 …</div>
+        <div class="sess-note"><span class="dot"></span>
+          관리 서버 ⇄ 원천사 <b style="color:var(--sub)">async 세션 — 이것이 감시 대상</b></div>
+        <div class="chips">
+          <span class="chip mono">송신: 서버 → 원천사 :송신포트</span>
+          <span class="chip mono">수신: 원천사 → 서버 :수신포트</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /diagram -->
+
+  <!-- 범례 -->
+  <div class="legend">
+    <h2>연결 종류</h2>
+    <div class="grid">
+      <div class="leg"><span class="sw o"></span><span><b>A2A</b> · JSON-RPC 2.0 (Master ↔ Agent)</span></div>
+      <div class="leg"><span class="sw n"></span><span><b>HTTP</b> REST · 웹 UI (Agent/브라우저 → Checker)</span></div>
+      <div class="leg"><span class="sw b"></span><span><b>JDBC</b> · Oracle (원천사 정보 조회, 캐시)</span></div>
+      <div class="leg"><span class="sw g"></span><span><b>SSH</b> · 세션풀 (Checker → 관리 서버)</span></div>
+      <div class="leg"><span class="sw r"></span><span><b>async 세션</b> · 송신/수신 (감시 대상)</span></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="k"><span class="env-dot p"></span><b style="color:var(--sub)">운영(PROD)</b> — checker :8096 / agent :20001</span>
+    <span class="k"><span class="env-dot t"></span><b style="color:var(--sub)">테스트(TEST)</b> — checker :8095 / agent :20002</span>
+    <span class="k">환경은 동일 구조, 포트만 다른 병렬 스택 · 업무(펌/가상)는 각 스택 안에서 탭·biz 로 구분</span>
+  </div>
+</div>

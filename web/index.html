@@ -1,0 +1,1382 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원천사 연결 상태 점검</title>
+<style>
+  :root{
+    /* Hecto Financial Design System */
+    --bg: #F6F6F9;            /* background-02 */
+    --surface: #FFFFFF;       /* background-01 */
+    --line: #E5E5E8;          /* line-03 */
+    --line-soft: #F0F0F3;
+    --text-1: #151515;        /* text-03 */
+    --text-2: #454545;        /* text-04 */
+    --text-3: #888888;        /* text-05 */
+    --text-4: #B0B0B3;        /* text-06 */
+    --orange: #FF6114;        /* hecto-orange-50 / cta */
+    --orange-strong: #F85100; /* hecto-orange-60 / primary */
+    --orange-press: #D54000;
+    --orange-5: #FFEFE7;
+    --green: #28C85D;         /* green-50 */
+    --green-text: #187D3A;    /* green-70 */
+    --green-5: #F0FDF4;
+    --green-20: #BDF5CE;
+    --red: #FF4242;           /* status-danger */
+    --red-text: #D10505;
+    --red-5: #FFEEED;
+    --red-20: #FFCDC9;
+    --amber: #D54000;
+    --amber-5: #FFEFE7;
+    --amber-20: #FFCFBD;
+    --neutral-5: #F6F6F9;
+    --disabled: #D1D1D5;
+    --r-sm:4px; --r-md:8px; --r-lg:12px; --r-base:16px;
+    --mono: "JetBrains Mono", "D2Coding", Consolas, "Courier New", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,
+                "Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+    background:var(--bg); color:var(--text-1);
+    letter-spacing:-0.02em; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 72px;}
+
+  /* Header */
+  header{margin-bottom:24px;}
+  h1{font-size:24px;font-weight:700;letter-spacing:-0.03em;margin:0;display:flex;align-items:center;gap:10px;}
+  h1 .mark{width:6px;height:22px;border-radius:99px;background:var(--orange);display:inline-block;}
+  .subtitle{color:var(--text-3);font-size:14px;line-height:1.6;margin-top:8px;}
+
+  /* 업무 탭 (펌/가상) */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:20px;}
+  .tab{
+    padding:12px 22px;font-size:15px;font-weight:600;letter-spacing:-0.02em;
+    color:var(--text-3);cursor:pointer;border:none;background:none;
+    border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;
+  }
+  .tab:hover{color:var(--text-2);}
+  .tab.active{color:var(--text-1);border-bottom-color:var(--orange-strong);}
+
+  /* Control card */
+  .control{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-base);
+    padding:20px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;
+  }
+  .field{flex:1;min-width:300px;}
+  .field label{display:block;font-size:12px;color:var(--text-3);margin-bottom:8px;font-weight:500;}
+  select{
+    width:100%;height:48px;padding:0 14px;font-size:14px;
+    border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);
+    color:var(--text-1);appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat;background-position:right 12px center;padding-right:40px;
+  }
+  select:focus{outline:none;border-color:var(--text-2);}
+  button{font-family:inherit;cursor:pointer;border:none;font-weight:600;letter-spacing:-0.02em;}
+  .btn-primary{
+    height:48px;padding:0 28px;font-size:14px;border-radius:var(--r-md);
+    background:var(--orange-strong);color:#fff;min-width:110px;transition:background .12s;
+  }
+  .btn-primary:hover{background:var(--orange);}
+  .btn-primary:active{background:var(--orange-press);}
+  .btn-primary:disabled{background:var(--disabled);cursor:not-allowed;}
+  .btn-icon{
+    height:48px;width:48px;border-radius:var(--r-md);background:var(--surface);
+    border:1px solid var(--line);color:var(--text-3);font-size:18px;
+  }
+  .btn-icon:hover{background:var(--neutral-5);}
+  .btn-secondary{
+    height:48px;padding:0 18px;font-size:14px;border-radius:var(--r-md);
+    background:var(--surface);border:1px solid var(--line);color:var(--text-2);
+  }
+  .btn-secondary:hover{background:var(--neutral-5);}
+  .btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
+
+  /* Source hero — IP:port 를 크게 */
+  .hero{
+    margin-top:20px;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--r-base);padding:20px 24px;
+    display:flex;align-items:center;gap:28px;flex-wrap:wrap;
+  }
+  .hero .who{min-width:160px;}
+  .hero .who .k{font-size:12px;color:var(--text-3);margin-bottom:4px;}
+  .hero .who .v{font-size:20px;font-weight:700;letter-spacing:-0.03em;}
+  .hero .who .id{font-size:12px;color:var(--text-4);font-family:var(--mono);margin-top:2px;}
+  .endpoints{display:flex;gap:16px;flex-wrap:wrap;}
+  .ep{
+    display:flex;flex-direction:column;gap:6px;padding:12px 16px;
+    background:var(--neutral-5);border:1px solid var(--line);border-radius:var(--r-lg);min-width:180px;
+  }
+  .ep .lbl{font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:0.02em;text-transform:uppercase;
+    display:flex;align-items:center;gap:6px;}
+  .ep .lbl .arw{font-size:13px;}
+  .ep .addr{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--text-1);letter-spacing:-0.01em;}
+
+  /* Summary tiles */
+  .summary{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;}
+  .tile{
+    flex:1;min-width:150px;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--r-lg);padding:16px 18px;
+  }
+  .tile .t-lbl{font-size:12px;color:var(--text-3);margin-bottom:8px;}
+  .tile .t-val{font-size:26px;font-weight:700;letter-spacing:-0.03em;}
+  .tile .t-val small{font-size:15px;color:var(--text-4);font-weight:500;}
+  .tile.ok .t-val{color:var(--green-text);}
+  .tile.warn .t-val{color:var(--amber);}
+  .tile.bad .t-val{color:var(--red-text);}
+
+  /* Server grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:20px;}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-base);
+    padding:0;overflow:hidden;border-left:4px solid var(--line);
+  }
+  .card.c-ok{border-left-color:var(--green);}
+  .card.c-warn{border-left-color:var(--orange);}
+  .card.c-bad{border-left-color:var(--red);}
+  .card-head{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:16px 18px 14px;border-bottom:1px solid var(--line-soft);
+  }
+  .card-head .sname{font-size:16px;font-weight:700;letter-spacing:-0.02em;}
+  .card-head .shost{font-size:13px;color:var(--text-3);font-family:var(--mono);margin-top:2px;}
+  .card-body{padding:6px 18px 16px;}
+
+  .row{padding:12px 0;border-bottom:1px solid var(--line-soft);}
+  .row:last-child{border-bottom:none;}
+  .row-top{display:flex;align-items:center;justify-content:space-between;}
+  .row-name{font-size:14px;font-weight:600;color:var(--text-2);display:flex;align-items:center;gap:8px;}
+  .row-name .tag{font-size:11px;font-weight:600;color:#fff;background:var(--text-4);border-radius:var(--r-sm);padding:2px 7px;}
+  .row-name .tag.send{background:#5D5D5D;}
+  .row-name .tag.recv{background:#5D5D5D;}
+  .status{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;}
+  .status .dot{width:9px;height:9px;border-radius:99px;flex:none;}
+  .s-ok{color:var(--green-text);}   .s-ok .dot{background:var(--green);box-shadow:0 0 0 3px var(--green-5);}
+  .s-bad{color:var(--red-text);}    .s-bad .dot{background:var(--red);box-shadow:0 0 0 3px var(--red-5);}
+  .s-warn{color:var(--amber);}      .s-warn .dot{background:var(--orange);box-shadow:0 0 0 3px var(--amber-5);}
+  .s-mut{color:var(--text-4);}      .s-mut .dot{background:var(--text-4);}
+
+  .row-detail{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .addr-chip{
+    font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text-2);
+    background:var(--neutral-5);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px 9px;
+  }
+  .meta{font-size:12px;color:var(--text-3);}
+  .sess-badge{
+    font-size:12px;font-weight:600;border-radius:99px;padding:3px 10px;
+    background:var(--green-5);color:var(--green-text);border:1px solid var(--green-20);
+  }
+  .sess-badge.zero{background:var(--neutral-5);color:var(--text-4);border-color:var(--line);}
+
+  /* Socket detail (collapsible, no forced scroll) */
+  details.sock{margin-top:10px;}
+  details.sock summary{
+    cursor:pointer;font-size:12px;color:var(--text-3);list-style:none;
+    display:inline-flex;align-items:center;gap:6px;user-select:none;
+  }
+  details.sock summary::-webkit-details-marker{display:none;}
+  details.sock summary .chev{transition:transform .15s;display:inline-block;}
+  details.sock[open] summary .chev{transform:rotate(90deg);}
+  .sock-lines{margin-top:8px;display:flex;flex-direction:column;gap:4px;}
+  .sock-lines .ln{
+    font-family:var(--mono);font-size:12px;color:var(--text-2);line-height:1.5;
+    background:var(--neutral-5);border-radius:var(--r-sm);padding:6px 9px;
+    word-break:break-all;white-space:pre-wrap;
+  }
+  .err-box{
+    margin:10px 0 4px;font-size:13px;color:var(--red-text);background:var(--red-5);
+    border:1px solid var(--red-20);border-radius:var(--r-md);padding:10px 12px;line-height:1.5;
+  }
+
+  /* SSH 세션 바 */
+  .sshbar{margin-top:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);}
+  .sshbar .lbl{font-size:13px;color:var(--text-2);font-weight:700;}
+  .sshbar .sbtn{height:34px;padding:0 14px;font-size:13px;font-weight:600;border-radius:var(--r-md);
+    border:1px solid var(--line);background:var(--surface);color:var(--text-2);cursor:pointer;font-family:inherit;}
+  .sshbar .sbtn:hover{background:var(--neutral-5);}
+  .sshbar .sbtn.primary{background:var(--text-1);color:#fff;border-color:var(--text-1);}
+  .sshbar .sbtn:disabled{opacity:.5;cursor:not-allowed;}
+  .sshbar .sep{flex:1;}
+  .sshbar .chip{font-size:12px;font-family:var(--mono);font-weight:600;border-radius:99px;
+    padding:3px 10px;border:1px solid var(--line);display:inline-flex;align-items:center;gap:5px;}
+  .sshbar .chip .d{width:7px;height:7px;border-radius:99px;background:var(--text-4);}
+  .sshbar .chip.on{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
+  .sshbar .chip.on .d{background:var(--green);}
+  .sshbar .chip.off{background:var(--neutral-5);color:var(--text-4);}
+  .sshbar .chip.err{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .sshbar .chip.err .d{background:var(--red);}
+
+  .msg{color:var(--text-3);font-size:14px;margin-top:20px;text-align:center;padding:24px;}
+  .msg.error{color:var(--red-text);}
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line);
+        border-top-color:var(--orange);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px;margin-right:8px;}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .empty{color:var(--text-4);font-size:13px;margin-top:6px;}
+  .dbtarget{font-size:12px;margin-top:14px;padding-left:2px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .dbtarget .lbl{color:var(--text-3);}
+  .dbtarget .val{font-family:var(--mono);font-weight:600;color:var(--text-2);
+    background:var(--neutral-5);border:1px solid var(--line);border-radius:var(--r-sm);padding:3px 9px;}
+  .updated{font-size:12px;color:var(--text-3);margin-top:8px;padding-left:2px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .updated .warn{color:var(--amber);}
+  .updated .badge-db{font-size:11px;font-weight:600;border-radius:99px;padding:2px 9px;
+    background:var(--orange-5);color:var(--orange-strong);border:1px solid var(--amber-20);}
+
+  /* 뷰 토글 (단건/전체) */
+  .viewtoggle{display:inline-flex;gap:2px;background:var(--neutral-5);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:3px;margin-bottom:18px;}
+  .viewtoggle .vt{border:none;background:none;font-family:inherit;font-size:13px;font-weight:600;
+    color:var(--text-3);padding:7px 18px;border-radius:6px;cursor:pointer;}
+  .viewtoggle .vt.active{background:var(--surface);color:var(--text-1);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+
+  /* 전체 조회 테이블 */
+  .btable{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--r-base);overflow:hidden;}
+  .btable th,.btable td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line-soft);vertical-align:middle;}
+  .btable thead th{background:var(--neutral-5);color:var(--text-3);font-weight:600;font-size:12px;
+    position:sticky;top:0;white-space:nowrap;}
+  .btable tbody tr:last-child td{border-bottom:none;}
+  .btable tbody tr:hover{background:var(--neutral-5);}
+  .btable .cb{width:36px;text-align:center;}
+  .btable input[type=checkbox]{width:16px;height:16px;accent-color:var(--orange-strong);cursor:pointer;}
+  .btable .nm{font-weight:600;color:var(--text-1);}
+  .btable .mono{font-family:var(--mono);color:var(--text-2);}
+  .btable .st{white-space:nowrap;font-weight:600;}
+  .btable .st .frac{font-family:var(--mono);}
+  .st.ok{color:var(--green-text);} .st.warn{color:var(--amber);} .st.bad{color:var(--red-text);} .st.mut{color:var(--text-4);}
+  .btable .rowdot{display:inline-block;width:9px;height:9px;border-radius:99px;background:var(--text-4);margin-right:2px;}
+  .rowdot.ok{background:var(--green);} .rowdot.warn{background:var(--orange);} .rowdot.bad{background:var(--red);}
+  .btable td.errcell{color:var(--red-text);font-size:12px;}
+  .bwrap-scroll{overflow-x:auto;}
+  .btable th.svr{text-align:center;white-space:nowrap;}
+  .btable td.svrcell{text-align:center;white-space:nowrap;}
+  .mini{display:inline-block;font-size:11px;font-weight:600;font-family:var(--mono);
+    border-radius:var(--r-sm);padding:2px 6px;margin:0 2px;border:1px solid var(--line);}
+  .mini.ok{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
+  .mini.no{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .mini.mut{background:var(--neutral-5);color:var(--text-4);}
+  .mini.err{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .mini.tt{background:var(--panel2,#eef1f5);background:#eef1f5;color:var(--text-2);border-color:var(--line);}
+  .btable th.tot, .btable td.tot{background:#fafbfc;border-left:2px solid var(--line);}
+  .btable tfoot td{background:#fafbfc;border-top:2px solid var(--line);font-weight:600;}
+  .btable tfoot td.totlabel{text-align:right;color:var(--text-2);white-space:nowrap;}
+  /* 자동 점검 */
+  .autolbl{font-size:13px;color:var(--text-2);font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;}
+  .autolbl input{width:15px;height:15px;accent-color:var(--orange-strong);}
+  #autoInt{height:40px;min-width:auto;width:auto;padding:0 30px 0 12px;flex:none;}
+  .autoinfo{font-size:12px;color:var(--text-3);margin-top:10px;min-height:16px;display:flex;align-items:center;gap:8px;}
+  .autoinfo .live{display:inline-flex;align-items:center;gap:6px;color:var(--green-text);font-weight:600;}
+  .autoinfo .live .d{width:8px;height:8px;border-radius:99px;background:var(--green);animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  /* 행 클릭 상세 */
+  .btable tbody tr.clickable{cursor:pointer;}
+  .btable tr.detailrow td{background:#f7f9fb;padding:0;border-bottom:1px solid var(--line);}
+  .detailbox{padding:16px 18px;}
+  tr.flash td{animation:flashbg 2s ease-out;}
+  @keyframes flashbg{0%{background:#fff3cd}100%{background:transparent}}
+  /* 토스트 알람 */
+  .toast{position:fixed;top:14px;right:14px;z-index:200;display:none;flex-direction:column;gap:8px;max-width:380px;}
+  .toast .t{background:var(--text-1);color:#fff;border-radius:var(--r-md);padding:12px 16px;font-size:13px;
+    box-shadow:0 6px 24px rgba(0,0,0,.25);border-left:4px solid var(--orange);}
+  .toast .t.bad{border-left-color:var(--red);}
+  .toast .t b{color:#ffd9c9;}
+  /* 이력 상태 배지 */
+  .hstat{font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;}
+  .hstat.ok{background:var(--green-5);color:var(--green-text);border:1px solid var(--green-20);}
+  .hstat.warn{background:var(--orange-5);color:var(--orange-strong);border:1px solid var(--amber-20);}
+  .hstat.bad{background:var(--red-5);color:var(--red-text);border:1px solid var(--red-20);}
+  .hstat.mut{background:var(--neutral-5);color:var(--text-4);border:1px solid var(--line);}
+  .hmode{font-size:11px;font-weight:600;border-radius:var(--r-sm);padding:2px 8px;background:var(--neutral-5);color:var(--text-3);border:1px solid var(--line);}
+
+  /* Environment banner (운영/테스트 구분) */
+  .envbar{
+    position:sticky;top:0;z-index:50;display:none;
+    align-items:center;justify-content:center;gap:10px;
+    padding:10px 16px;font-size:14px;font-weight:700;letter-spacing:-0.01em;color:#fff;
+  }
+  .envbar .ico{font-size:15px;}
+  .envbar .tag{font-family:var(--mono);font-weight:700;font-size:12px;
+    background:rgba(255,255,255,.22);border-radius:99px;padding:2px 10px;}
+  .envbar.red{background:var(--red);}
+  .envbar.blue{background:#2465FF;}
+  .envbar.gray{background:#5D5D5D;}
+
+  /* 설정 편집 */
+  .setcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-base);padding:20px 22px;margin-top:16px;}
+  .setcard h3{font-size:16px;font-weight:700;letter-spacing:-0.02em;margin:0 0 4px;display:flex;align-items:center;gap:8px;}
+  .setcard h3 .badge{font-size:11px;font-weight:600;border-radius:99px;padding:2px 9px;background:var(--orange-5);color:var(--orange-strong);border:1px solid var(--amber-20);}
+  .setcard .desc{font-size:12px;color:var(--text-3);margin:0 0 14px;line-height:1.6;}
+  .setrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
+  .setrow .inp{height:38px;padding:0 11px;font-size:13px;border:1px solid var(--line);border-radius:var(--r-sm);
+    background:var(--surface);color:var(--text-1);font-family:inherit;min-width:0;}
+  .setrow .inp:focus{outline:none;border-color:var(--text-2);}
+  .setrow .inp.mono{font-family:var(--mono);}
+  .setrow .lab{font-size:11px;color:var(--text-4);width:100%;margin:2px 0 -4px 2px;}
+  .set-in{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;margin-bottom:12px;}
+  .set-in .srchead{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+  .set-in .eprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px dashed var(--line-soft);}
+  .set-in .eprow:first-of-type{border-top:none;}
+  .set-eps-lbl{font-size:11px;font-weight:600;color:var(--text-3);margin:6px 0 2px;}
+  .xbtn{height:32px;width:32px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface);
+    color:var(--red-text);font-size:16px;cursor:pointer;font-family:inherit;flex:none;}
+  .xbtn:hover{background:var(--red-5);border-color:var(--red-20);}
+  .addbtn{height:34px;padding:0 14px;font-size:13px;font-weight:600;border-radius:var(--r-md);
+    border:1px dashed var(--line);background:var(--neutral-5);color:var(--text-2);cursor:pointer;font-family:inherit;}
+  .addbtn:hover{border-color:var(--orange-strong);color:var(--orange-strong);}
+  .setbar{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap;}
+  .setbar .savemsg{font-size:13px;color:var(--green-text);font-weight:600;}
+  .setbar .savemsg.err{color:var(--red-text);}
+  .setnote{font-size:12px;color:var(--text-3);background:var(--neutral-5);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:10px 12px;margin-bottom:12px;line-height:1.6;}
+  .setnote.warn{background:var(--amber-5);border-color:var(--amber-20);color:var(--amber);}
+  .setbizsel{display:inline-flex;gap:2px;background:var(--neutral-5);border:1px solid var(--line);
+    border-radius:var(--r-md);padding:3px;margin:0 0 4px;flex-wrap:wrap;}
+  .setbizsel .bz{border:none;background:none;font-family:inherit;font-size:13px;font-weight:600;
+    color:var(--text-3);padding:7px 16px;border-radius:6px;cursor:pointer;}
+  .setbizsel .bz.active{background:var(--surface);color:var(--text-1);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+  .setchk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);font-weight:600;cursor:pointer;}
+  .setchk input{width:16px;height:16px;accent-color:var(--orange-strong);}
+</style>
+</head>
+<body>
+<div id="envbar" class="envbar"></div>
+<div id="toast" class="toast"></div>
+<div class="wrap">
+  <header>
+    <h1><span class="mark"></span>원천사 연결 상태 점검</h1>
+    <div class="subtitle">원천사를 선택하면 관리 서버 전체에 접속해 <b>송신 세션</b>·<b>수신 대기(LISTEN)</b>·<b>수신 세션</b>을 한 번에 확인합니다.</div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="viewtoggle">
+    <button class="vt active" id="vtSingle">단건 조회</button>
+    <button class="vt" id="vtBulk">전체 조회</button>
+    <button class="vt" id="vtHistory">조회 이력</button>
+    <button class="vt" id="vtSettings">설정</button>
+  </div>
+
+  <div class="dbtarget" id="dbtarget"></div>
+  <div class="updated" id="updated"></div>
+  <div class="sshbar" id="sshbar"></div>
+
+  <!-- 단건 조회 -->
+  <div id="singleView">
+    <div class="control">
+      <div class="field">
+        <label>원천사</label>
+        <select id="src"><option value="">불러오는 중...</option></select>
+      </div>
+      <button id="reload" class="btn-secondary" title="원천사 출처(파일/설정/DB)에서 목록을 다시 불러와 캐시를 갱신합니다">↻ 재갱신</button>
+      <button id="check" class="btn-primary" disabled>연결 조회</button>
+    </div>
+    <div id="result"></div>
+  </div>
+
+  <!-- 전체 조회 -->
+  <div id="bulkView" style="display:none">
+    <div class="control" style="flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--text-3)" id="bulkInfo">원천사 목록</div>
+      <div style="flex:1;min-width:12px"></div>
+      <label class="autolbl"><input type="checkbox" id="autoChk"> 자동 점검</label>
+      <select id="autoInt" title="자동 점검 주기">
+        <option value="10">10초</option>
+        <option value="30" selected>30초</option>
+        <option value="60">60초</option>
+        <option value="300">5분</option>
+      </select>
+      <button id="reloadB" class="btn-secondary" title="원천사 목록 재갱신">↻ 재갱신</button>
+      <button id="checkAll" class="btn-primary">선택 연결 조회</button>
+    </div>
+    <div id="autoInfo" class="autoinfo"></div>
+    <div id="bulkWrap"></div>
+  </div>
+
+  <!-- 조회 이력 -->
+  <div id="historyView" style="display:none">
+    <div class="control">
+      <div style="font-size:13px;color:var(--text-3)" id="histInfo">조회 이력</div>
+      <div style="flex:1"></div>
+      <button id="reloadH" class="btn-secondary" title="이력 새로고침">↻ 새로고침</button>
+    </div>
+    <div id="histWrap"></div>
+  </div>
+
+  <!-- 설정 -->
+  <div id="settingsView" style="display:none">
+    <div id="setWrap"><div class="msg"><span class="spin"></span>설정 불러오는 중...</div></div>
+  </div>
+</div>
+
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var srcSel = $('src'), checkBtn = $('check'), reloadBtn = $('reload'), result = $('result');
+var envbar = $('envbar'), tabsEl = $('tabs'), updatedEl = $('updated'), dbtargetEl = $('dbtarget'), sshbarEl = $('sshbar');
+var currentBiz = '';
+var envInfo = {};       // {name,tag,color}
+var bizMap = {};        // id -> {name,dbUrl,dbUser}
+var currentSources = [];// 현재 업무의 원천사 목록 (단건 드롭다운/전체 테이블 공용)
+var currentServers = [];// 현재 업무의 서버 목록 [{serverId,host}] (전체 조회 컬럼용)
+var currentView = 'single';
+var autoTimer = null;   // 자동 점검 타이머
+var statusSnapshot = {};// 직전 종합상태 스냅샷 (id -> ok/warn/bad) — 변화 감지용
+var curOverall = {};    // 이번 fillBulk 의 종합상태
+
+// 뷰 토글
+$('vtSingle').onclick = function(){ setView('single'); };
+$('vtBulk').onclick   = function(){ setView('bulk'); };
+$('vtHistory').onclick= function(){ setView('history'); };
+$('vtSettings').onclick= function(){ setView('settings'); };
+function setView(v){
+  currentView = v;
+  $('vtSingle').className = 'vt' + (v==='single'?' active':'');
+  $('vtBulk').className   = 'vt' + (v==='bulk'?' active':'');
+  $('vtHistory').className= 'vt' + (v==='history'?' active':'');
+  $('vtSettings').className= 'vt' + (v==='settings'?' active':'');
+  $('singleView').style.display = v==='single'?'':'none';
+  $('bulkView').style.display   = v==='bulk'?'':'none';
+  $('historyView').style.display= v==='history'?'':'none';
+  $('settingsView').style.display= v==='settings'?'':'none';
+  // 설정 화면에선 상단 조회용 바(출처/갱신/SSH) 숨김
+  var hideTop = (v==='settings');
+  dbtargetEl.style.display = hideTop?'none':'';
+  updatedEl.style.display  = hideTop?'none':'';
+  sshbarEl.style.display   = hideTop?'none':'';
+  if(v!=='bulk') stopAuto();      // 전체 조회 벗어나면 자동 점검 중지
+  if(v==='bulk') buildBulkTable();
+  if(v==='history') loadHistoryView();
+  if(v==='settings') loadSettings();
+}
+
+function loadBusinesses(){
+  fetch('/api/businesses').then(function(r){return r.json();}).then(function(d){
+    var list = d.businesses || [];
+    tabsEl.innerHTML = ''; bizMap = {};
+    if(list.length <= 1){ tabsEl.style.display = 'none'; }  // 업무 1개면 탭 숨김
+    for(var i=0;i<list.length;i++){
+      var b = list[i];
+      bizMap[b.id] = { name:b.name||b.id, dbUrl:b.dbUrl||'', dbUser:b.dbUser||'',
+                       sourceType:b.sourceType||'', sourceRef:b.sourceRef||'' };
+      tabsEl.appendChild(makeTab(b, i===0));
+    }
+    currentBiz = list.length ? list[0].id : '';
+    renderDbTarget();
+    loadSshStatus();
+    loadSources();
+  }).catch(function(){ currentBiz=''; loadSources(); });
+}
+
+function makeTab(b, active){
+  var el = document.createElement('button');
+  el.className = 'tab' + (active?' active':'');
+  el.textContent = b.name || b.id;
+  el.onclick = function(){
+    if(currentBiz === b.id) return;
+    var kids = tabsEl.children;
+    for(var k=0;k<kids.length;k++){ kids[k].className = 'tab'; }
+    el.className = 'tab active';
+    currentBiz = b.id;
+    result.innerHTML = '';
+    stopAuto(); statusSnapshot = {};   // 업무 바뀌면 자동점검/스냅샷 리셋
+    renderDbTarget();
+    loadSshStatus();
+    loadSources();
+  };
+  return el;
+}
+
+// jdbc:oracle:thin:@host:port:sid -> host:port:sid
+function dbShort(url){ return String(url||'').replace(/^jdbc:oracle:thin:@\/*/i, ''); }
+
+// 원천사 출처 종류 한글 라벨
+function sourceTypeKo(t){
+  return t==='file'?'파일 주입':(t==='config'?'설정(config) 내장':(t==='db'?'DB 조회':'미설정'));
+}
+
+function renderDbTarget(){
+  var b = bizMap[currentBiz];
+  if(!b){ dbtargetEl.innerHTML=''; return; }
+  dbtargetEl.innerHTML =
+    '<span class="lbl">원천사 출처</span>'+
+    '<span class="val">'+esc(sourceTypeKo(b.sourceType))+'</span>'+
+    '<span class="lbl">경로/대상</span>'+
+    '<span class="val">'+esc(b.sourceRef||'-')+'</span>';
+}
+
+// ---- SSH 세션 (버튼으로만 접속, 풀에서 재사용) ----
+function sshCall(action, connecting){
+  if(connecting) sshbarEl.innerHTML = '<span class="lbl">SSH 세션</span><span class="spin" style="width:14px;height:14px"></span> <span style="color:var(--text-3);font-size:13px">서버 접속 중...</span>';
+  return fetch('/api/ssh?biz='+encodeURIComponent(currentBiz)+'&action='+action)
+    .then(function(r){return r.json();}).then(function(d){ renderSsh(d.servers||[]); })
+    .catch(function(){ renderSsh([]); });
+}
+function loadSshStatus(){ sshCall('status', false); }
+
+function renderSsh(list){
+  currentServers = list;                       // 전체 조회 서버 컬럼용
+  if(currentView==='bulk') buildBulkTable();   // 서버 목록 확보되면 컬럼 재구성
+  var connCnt=0; for(var i=0;i<list.length;i++){ if(list[i].connected) connCnt++; }
+  var h = '<span class="lbl">SSH 세션</span>'+
+          '<button class="sbtn primary" id="sshConn">세션 접속</button>'+
+          '<button class="sbtn" id="sshDisc"'+(connCnt?'':' disabled')+'>끊기</button>';
+  for(var j=0;j<list.length;j++){
+    var s=list[j];
+    var cls = s.connected ? 'on' : (s.error ? 'err' : 'off');
+    var txt = s.connected ? '연결' : (s.error ? '실패' : '미접속');
+    h += '<span class="chip '+cls+'" title="'+esc(s.host)+(s.error?' — '+esc(s.error):'')+'">'+
+         '<span class="d"></span>'+esc(s.serverId||s.host)+' '+txt+'</span>';
+  }
+  sshbarEl.innerHTML = h;
+  var c=$('sshConn'), dc=$('sshDisc');
+  if(c) c.onclick=function(){ sshCall('connect', true); };
+  if(dc) dc.onclick=function(){ sshCall('disconnect', false); };
+}
+
+function loadEnv(){
+  fetch('/api/env').then(function(r){return r.json();}).then(function(e){
+    envInfo = e || {};
+    if(!e || !e.name) return;
+    var color = (e.color==='red'||e.color==='blue') ? e.color : 'gray';
+    envbar.className = 'envbar '+color;
+    var warn = color==='red' ? ' — 이 화면은 운영 서버를 조회합니다' : '';
+    envbar.innerHTML = '<span class="ico">'+(color==='red'?'⚠':'●')+'</span>'+
+                       esc(e.name)+' 환경 <span class="tag">'+esc(e.tag||'')+'</span>'+
+                       '<span style="font-weight:500;opacity:.9">'+warn+'</span>';
+    envbar.style.display = 'flex';
+    document.title = '['+e.tag+'] 원천사 연결 상태 점검';
+  }).catch(function(){});
+}
+
+// 원천사의 엔드포인트 배열 (없으면 flat 필드로 1개 합성)
+// 송신/수신 분리 접근 (신 모델 sends/recvs, 구 모델 endpoints/flat 하위호환)
+function sendsOf(s){
+  if(s.sends) return s.sends;
+  if(s.endpoints) { var r=[]; for(var i=0;i<s.endpoints.length;i++){ var e=s.endpoints[i]; if(e.sendip&&e.sendport) r.push(e); } return r; }
+  if(s.sendip&&s.sendport) return [{label:'',sendip:s.sendip,sendport:s.sendport,checkMode:s.checkMode||'session',expectSend:s.expectSend||0}];
+  return [];
+}
+function recvsOf(s){
+  if(s.recvs) return s.recvs;
+  if(s.endpoints) { var r=[], seen={}; for(var i=0;i<s.endpoints.length;i++){ var e=s.endpoints[i]; if(e.recvport&&!seen[e.recvport]){ seen[e.recvport]=1; r.push(e); } } return r; }
+  if(s.recvport) return [{label:'',recvport:s.recvport,expectRecv:s.expectRecv||0}];
+  return [];
+}
+// 드롭다운/목록용 짧은 요약
+function epSummary(s){
+  var sd=sendsOf(s), rc=recvsOf(s), parts=[];
+  if(sd.length===1) parts.push('송신 '+sd[0].sendip+':'+sd[0].sendport); else if(sd.length>1) parts.push('송신 '+sd.length+'세션');
+  if(rc.length===1) parts.push('수신 :'+rc[0].recvport); else if(rc.length>1) parts.push('수신 '+rc.length+'포트');
+  return parts.join(' / ')||'(엔드포인트 없음)';
+}
+// 벌크 테이블 엔드포인트 셀 (HTML)
+function bulkEpText(s){
+  var sd=sendsOf(s), rc=recvsOf(s), out=[];
+  for(var i=0;i<sd.length;i++){ var e=sd[i]; var mt=(e.checkMode&&e.checkMode!=='session')?(' <span style="color:#2465FF">'+esc(e.checkMode)+'</span>'):''; out.push('↗'+esc(e.sendip)+':'+esc(e.sendport)+mt); }
+  for(var j=0;j<rc.length;j++){ out.push('↘:'+esc(rc[j].recvport)); }
+  return out.length? out.join('<br>') : '<span style="color:var(--text-4)">(없음)</span>';
+}
+
+function loadSources(refresh){
+  srcSel.innerHTML = '<option value="">'+(refresh?'원천사 재조회 중...':'불러오는 중...')+'</option>';
+  checkBtn.disabled = true;
+  reloadBtn.disabled = true;
+  updatedEl.innerHTML = refresh ? '<span class="spin" style="width:12px;height:12px"></span> 원천사 재조회 중...' : '';
+  fetch('/api/sources?biz='+encodeURIComponent(currentBiz)+(refresh?'&refresh=1':''))
+    .then(function(r){return r.json();}).then(function(d){
+    reloadBtn.disabled=false;
+    if(d.error){ srcSel.innerHTML='<option value="">조회 오류</option>';
+      updatedEl.innerHTML='';
+      result.innerHTML='<div class="msg error">원천사 목록 조회 실패: '+esc(d.error)+'</div>'; return; }
+    var list=d.sources||[];
+    currentSources = list;
+    if(currentView==='bulk') buildBulkTable();
+    if(!list.length){
+      srcSel.innerHTML='<option value="">원천사 없음 — [↻ 재갱신] 으로 불러오기</option>';
+      updatedEl.innerHTML='<span>캐시 없음. ↻ 재갱신을 눌러 원천사 목록을 불러오세요.</span>';
+      return;
+    }
+    var html='<option value="">원천사를 선택하세요 ('+list.length+'개)</option>';
+    for(var i=0;i<list.length;i++){
+      var s=list[i];
+      html+='<option value="'+esc(s.id)+'">'+esc(s.name||s.id)+'  —  '+esc(epSummary(s))+'</option>';
+    }
+    srcSel.innerHTML=html;
+    // 갱신 정보 (출처별 라벨)
+    var originKo = d.origin==='file'?'파일에서 갱신됨':(d.origin==='config'?'설정에서 갱신됨':(d.origin==='db'?'DB에서 갱신됨':'갱신됨'));
+    var u = '최근 갱신 <b>'+esc(d.updatedAt||'-')+'</b>';
+    if(d.fromDb || (refresh && d.origin)) u += ' <span class="badge-db">'+esc(originKo)+'</span>';
+    else u += ' <span style="color:var(--text-4)">· 캐시</span>';
+    if(d.warn) u += ' <span class="warn">⚠ '+esc(d.warn)+'</span>';
+    updatedEl.innerHTML = u;
+  }).catch(function(e){
+    reloadBtn.disabled=false;
+    srcSel.innerHTML='<option value="">연결 오류</option>';
+    updatedEl.innerHTML='';
+    result.innerHTML='<div class="msg error">'+esc(String(e))+'</div>';
+  });
+}
+
+srcSel.onchange=function(){ checkBtn.disabled=!srcSel.value; };
+reloadBtn.onclick=function(){
+  var b = bizMap[currentBiz] || {};
+  var envtxt = envInfo.name ? ('['+envInfo.name+(envInfo.tag?' '+envInfo.tag:'')+'] ') : '';
+  var msg = envtxt + (b.name||currentBiz) + ' 원천사 목록을 다시 불러옵니다.\n\n'+
+            '출처  : ' + sourceTypeKo(b.sourceType) + '\n'+
+            '대상  : ' + (b.sourceRef||'-') + '\n\n'+
+            '계속할까요?';
+  if(window.confirm(msg)) loadSources(true);
+};
+
+checkBtn.onclick=function(){
+  var id=srcSel.value; if(!id) return;
+  checkBtn.disabled=true;
+  result.innerHTML='<div class="msg"><span class="spin"></span>서버 접속하여 확인 중...</div>';
+  fetch('/api/check?biz='+encodeURIComponent(currentBiz)+'&id='+encodeURIComponent(id)).then(function(r){return r.json();}).then(function(d){
+    checkBtn.disabled=false;
+    if(d.error){ result.innerHTML='<div class="msg error">'+esc(d.error)+'</div>'; return; }
+    render(d);
+  }).catch(function(e){
+    checkBtn.disabled=false;
+    result.innerHTML='<div class="msg error">'+esc(String(e))+'</div>';
+  });
+};
+
+function render(d){
+  var s=d.source, res=d.results||[];
+  var total=res.length, sendCnt=0, listenCnt=0, sessSum=0, errCnt=0, sendTotal=0, recvTotal=0;
+  for(var i=0;i<res.length;i++){
+    if(res[i].sendConnected) sendCnt++;
+    if(res[i].recvListening) listenCnt++;
+    sessSum += (res[i].recvEstabCount||0);
+    sendTotal += (res[i].sendCount||0);
+    recvTotal += (res[i].recvEstabCount||0);
+    if(!res[i].ok) errCnt++;
+  }
+
+  var html='';
+  // Hero: 원천사 + 송신 세션들 + 수신 포트들 (분리)
+  var sd=sendsOf(s), rc=recvsOf(s), epHero='';
+  for(var e0=0;e0<sd.length;e0++){ var e=sd[e0]; var lab=e.label||(sd.length>1?('송신 '+(e0+1)):'');
+    epHero+='<div class="ep">'+(lab?'<div class="lbl" style="color:var(--orange-strong)">'+esc(lab)+'</div>':'')+
+      '<div class="lbl"><span class="arw">↗</span>송신 대상</div><div class="addr">'+esc(e.sendip)+':'+esc(e.sendport)+'</div></div>';
+  }
+  for(var r0=0;r0<rc.length;r0++){ var r2=rc[r0]; var lab2=r2.label||(rc.length>1?('수신 '+(r0+1)):'');
+    epHero+='<div class="ep">'+(lab2?'<div class="lbl" style="color:var(--orange-strong)">'+esc(lab2)+'</div>':'')+
+      '<div class="lbl"><span class="arw">↘</span>수신 포트</div><div class="addr">:'+esc(r2.recvport)+'</div></div>';
+  }
+  var subKo=[]; if(sd.length) subKo.push('송신 '+sd.length); if(rc.length) subKo.push('수신 '+rc.length);
+  html+='<div class="hero">'+
+        '<div class="who"><div class="k">원천사'+(subKo.length?' · '+subKo.join(' / '):'')+'</div>'+
+          '<div class="v">'+esc(s.name||s.id)+'</div>'+
+          '<div class="id">'+esc(s.id)+'</div></div>'+
+        '<div class="endpoints">'+epHero+'</div></div>';
+
+  // 종합 상태 배지 (백엔드 클러스터 판정)
+  html+=statusPill(d.status);
+  // Summary tiles: 클러스터 합산 실제/설정
+  var sendApp = sendApplicableOf(s), recvApp = recvApplicableOf(s);
+  var sNeed=sendNeedOf(s), rNeed=recvNeedOf(s);
+  html+='<div class="summary">'+
+        (sendApp ? tileFrac('송신 세션 (실제/설정)', sendTotal, sNeed) : tileTxt('송신', '해당없음', 'mut'))+
+        (recvApp ? (rNeed>0 ? tileFrac('수신 세션 (실제/설정)', recvTotal, rNeed) : tileNum('수신 세션', recvTotal, recvTotal>0?'ok':'warn')) : tileTxt('수신', '해당없음', 'mut'))+
+        (total>1 ? tileNum('점검 서버', total, 'ok') : '')+
+        (errCnt? tileNum('점검 실패', errCnt, 'bad') : '')+
+        '</div>';
+
+  // Server cards
+  html+='<div class="grid">';
+  for(var j=0;j<res.length;j++){ html+=card(res[j], s); }
+  html+='</div>';
+  result.innerHTML=html;
+}
+
+function cls(cnt,total){ return cnt===total?'ok':(cnt===0?'bad':'warn'); }
+
+// 송신/수신 판정 대상 여부 (checkMode=skip 은 송신 제외)
+function sendApplicableOf(s){ var a=sendsOf(s); for(var i=0;i<a.length;i++){ var e=a[i]; if(e.sendip && e.sendport && e.checkMode!=='skip') return true; } return false; }
+function recvApplicableOf(s){ return recvsOf(s).length>0; }
+function modeTag(mode){
+  if(mode==='probe') return ' <span class="tag" style="background:#2465FF">probe</span>';
+  if(mode==='skip')  return ' <span class="tag" style="background:var(--text-4)">skip</span>';
+  return '';
+}
+
+function tile(lbl, cnt, total, klass){
+  return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
+         '<div class="t-val">'+cnt+' <small>/ '+total+'</small></div></div>';
+}
+function tileTxt(lbl, txt, klass){
+  return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
+         '<div class="t-val" style="font-size:18px">'+txt+'</div></div>';
+}
+// 실제/설정 타일 (실제 >= 설정이면 초록, 부족하면 주황, 0이면 빨강)
+function tileFrac(lbl, cnt, need){
+  var klass = need>0 ? (cnt>=need?'ok':(cnt>0?'warn':'bad')) : (cnt>0?'ok':'warn');
+  return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
+         '<div class="t-val">'+cnt+' <small>/ '+(need>0?need:'-')+'</small></div></div>';
+}
+// 설정(기대) 세션수 합계
+function sendNeedOf(s){ var a=sendsOf(s),n=0; for(var i=0;i<a.length;i++){ var e=a[i]; if(e.checkMode==='skip')continue; n+=(e.expectSend>0?e.expectSend:1); } return n; }
+function recvNeedOf(s){ var a=recvsOf(s),n=0; for(var i=0;i<a.length;i++){ n+=(a[i].expectRecv>0?a[i].expectRecv:0); } return n; }
+// 종합 상태 배지
+function statusPill(st){
+  st=st||'mut';
+  var ko = st==='ok'?'정상':(st==='bad'?'장애':(st==='warn'?'주의':'점검없음'));
+  var col = st==='ok'?'var(--green-text)':(st==='bad'?'var(--red-text)':(st==='warn'?'var(--amber)':'var(--text-4)'));
+  var bg = st==='ok'?'var(--green-5)':(st==='bad'?'var(--red-5)':(st==='warn'?'var(--amber-5)':'var(--neutral-5)'));
+  return '<div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;'+
+    'background:'+bg+';color:'+col+';font-weight:700;font-size:15px">'+
+    '<span style="width:10px;height:10px;border-radius:99px;background:'+col+'"></span>종합 상태: '+ko+'</div>';
+}
+function tileNum(lbl, n, klass){
+  return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
+         '<div class="t-val">'+n+'</div></div>';
+}
+
+function card(r, s){
+  var cardCls, h='';
+  if(!r.ok){ cardCls='c-bad'; }
+  else {
+    // 제외(skip)로 판정 대상이 아닌 축은 통과로 간주
+    var sendOk = (r.sendApplicable===false) || r.sendConnected;
+    var recvOk = (r.recvApplicable===false) || r.recvListening;
+    cardCls = (sendOk && recvOk) ? 'c-ok' : 'c-warn';
+  }
+
+  h+='<div class="card '+cardCls+'">';
+  h+='<div class="card-head"><div>'+
+       '<div class="sname">'+esc(r.serverId)+'</div>'+
+       '<div class="shost">'+esc(r.host)+'</div></div></div>';
+  h+='<div class="card-body">';
+
+  if(!r.ok){
+    h+='<div class="err-box">⚠ 점검 실패<br>'+esc(r.error||'알 수 없는 오류')+'</div>';
+    h+='</div></div>'; return h;
+  }
+
+  // 엔드포인트별 송신/수신 행 (이중화면 여러 세트). 구버전 응답이면 top-level 필드로 1개 합성.
+  var eps = (r.endpoints && r.endpoints.length) ? r.endpoints : [{
+     label:'', sendip:s.sendip, sendport:s.sendport, recvport:s.recvport, mode:'session', expectSend:0, expectRecv:0,
+     sendConnected:r.sendConnected, sendCount:r.sendCount, sendLines:r.sendLines,
+     recvListening:r.recvListening, recvOk:r.recvListening, recvEstabCount:r.recvEstabCount,
+     recvListenLines:r.recvListenLines, recvEstabLines:r.recvEstabLines }];
+  if(!eps.length){ h+='<div class="empty">엔드포인트 없음</div>'; }
+  else {
+    var sendEps=[], recvSeen={}, recvEps=[];
+    for(var k=0;k<eps.length;k++){ var ek=eps[k];
+      if(ek.sendip && ek.sendport){ sendEps.push(ek); }
+      else if(ek.recvport && !recvSeen[ek.recvport]){ recvSeen[ek.recvport]=1; recvEps.push(ek); }
+    }
+    var sendMulti=sendEps.length>1;
+    var seenS={};
+    for(var i=0;i<sendEps.length;i++){ var e=sendEps[i]; var sk=e.sendip+':'+e.sendport; if(seenS[sk]) continue; seenS[sk]=1; h+=sendRow(e, sendMulti, i); }
+    for(var j=0;j<recvEps.length;j++){ h+=recvRow(recvEps[j]); }
+  }
+
+  h+='</div></div>';
+  return h;
+}
+
+// 송신 행 (엔드포인트별, 방식별 표시: session/probe/skip)
+function sendRow(er, multi, idx){
+  var h='', mode=er.mode||'session';
+  if(multi){
+    var lab = er.label || ('세션 '+(idx+1));
+    h+='<div style="font-size:12px;font-weight:700;color:var(--orange-strong);margin:12px 0 2px;letter-spacing:-.01em">◆ '+esc(lab)+'</div>';
+  }
+  var statusHtml, badge;
+  if(mode==='skip'){
+    statusHtml=statusEl('mut','제외 (연결유지 아님)');
+    badge='<span class="sess-badge zero">송신 점검 안 함</span>';
+  } else if(mode==='probe'){
+    statusHtml = er.sendConnected ? statusEl('ok','열림 (OPEN)') : statusEl('bad','닫힘 (CLOSED)');
+    badge='<span class="'+(er.sendConnected?'sess-badge':'sess-badge zero')+'">'+(er.sendConnected?'접속 가능':'접속 불가')+'</span>';
+  } else {
+    var sendN=(er.sendCount!=null)?er.sendCount:(er.sendLines?er.sendLines.length:0);
+    var expS=er.expectSend||0;
+    var cntTxt = expS>0 ? (sendN+'/'+expS) : (''+sendN);
+    if(er.sendConnected) statusHtml=statusEl('ok','연결됨');
+    else if(sendN>0) statusHtml=statusEl('warn','부족 ('+sendN+'/'+expS+')');
+    else statusHtml=statusEl('bad','미연결');
+    badge='<span class="'+(er.sendConnected?'sess-badge':'sess-badge zero')+'">세션 '+cntTxt+'개</span>';
+  }
+  h+='<div class="row">'+
+     '<div class="row-top"><span class="row-name"><span class="tag send">송신</span>'+modeTag(mode)+'</span>'+statusHtml+'</div>'+
+     '<div class="row-detail"><span class="addr-chip">↗ '+esc(er.sendip)+':'+esc(er.sendport)+'</span>'+badge+'</div>'+
+     sock('소켓/probe '+(er.sendLines?er.sendLines.length:0)+'건', er.sendLines)+
+     '</div>';
+  return h;
+}
+// 수신 행 (수신포트 유니크 — 동일 포트는 합침). 기대 세션수(expectRecv) 있으면 부족 표시.
+function recvRow(er){
+  var rN=er.recvEstabCount||0, expR=er.expectRecv||0;
+  var recvOk = (er.recvOk!==undefined) ? er.recvOk : er.recvListening;
+  var cnt = expR>0 ? (rN+'/'+expR) : (''+rN);
+  var statusHtml;
+  if(!er.recvListening) statusHtml=statusEl('bad','닫힘');
+  else if(recvOk) statusHtml=statusEl('ok','대기중 (LISTEN)');
+  else statusHtml=statusEl('warn','세션 부족 ('+rN+'/'+expR+')');
+  var sessCls = recvOk ? 'sess-badge' : 'sess-badge zero';
+  return '<div class="row">'+
+     '<div class="row-top"><span class="row-name"><span class="tag recv">수신</span></span>'+
+       statusHtml+'</div>'+
+     '<div class="row-detail"><span class="addr-chip">↘ :'+esc(er.recvport)+'</span>'+
+       '<span class="'+sessCls+'">세션 '+cnt+'개</span></div>'+
+     sock('소켓 '+((er.recvListenLines?er.recvListenLines.length:0)+(er.recvEstabLines?er.recvEstabLines.length:0))+'건',
+          (er.recvListenLines||[]).concat(er.recvEstabLines||[]))+
+     '</div>';
+}
+
+function statusEl(kind, text){
+  var k = kind==='ok'?'s-ok':(kind==='bad'?'s-bad':(kind==='warn'?'s-warn':'s-mut'));
+  return '<span class="status '+k+'"><span class="dot"></span>'+text+'</span>';
+}
+
+function sock(label, lines){
+  if(!lines || !lines.length) return '';
+  var inner='';
+  for(var i=0;i<lines.length;i++){ inner+='<div class="ln">'+esc(lines[i])+'</div>'; }
+  return '<details class="sock"><summary><span class="chev">▸</span>'+esc(label)+'</summary>'+
+         '<div class="sock-lines">'+inner+'</div></details>';
+}
+
+// ---- 전체 조회 (테이블) ----
+$('reloadB').onclick = function(){ reloadBtn.onclick(); };   // 단건 재갱신과 동일(확인창+DB재조회)
+$('checkAll').onclick = runBulkCheck;
+
+function buildBulkTable(){
+  // 서버 목록이 아직 없으면 먼저 확보 (SSH status) 후 재구성
+  if(!currentServers.length){
+    fetch('/api/ssh?biz='+encodeURIComponent(currentBiz)+'&action=status')
+      .then(function(r){return r.json();}).then(function(d){ currentServers=d.servers||[]; renderBulkTable(); })
+      .catch(function(){ renderBulkTable(); });
+    return;
+  }
+  renderBulkTable();
+}
+
+function renderBulkTable(){
+  var wrap = $('bulkWrap'), info = $('bulkInfo');
+  if(!currentSources.length){
+    wrap.innerHTML = '<div class="msg">원천사가 없습니다. [↻ 재갱신] 으로 불러오세요.</div>';
+    info.textContent = '원천사 0개'; return;
+  }
+  info.textContent = '원천사 '+currentSources.length+'개 · 서버 '+currentServers.length+'대 (체크된 항목만 조회)';
+  var svrHead='';
+  for(var j=0;j<currentServers.length;j++){ svrHead += '<th class="svr">'+esc(currentServers[j].serverId||currentServers[j].host)+'</th>'; }
+  svrHead += '<th class="svr tot">합계<br><span style="font-weight:400;font-size:10px;color:var(--text-4)">실제/설정</span></th>';
+  var h = '<div class="bwrap-scroll"><table class="btable"><thead><tr>'+
+    '<th class="cb"><input type="checkbox" id="cbAll" checked></th>'+
+    '<th>원천사</th><th>엔드포인트 (송신↗ / 수신↘)</th>'+ svrHead +'</tr></thead><tbody>';
+  for(var i=0;i<currentSources.length;i++){
+    var s=currentSources[i];
+    var cells='';
+    for(var k=0;k<currentServers.length;k++){ cells += '<td class="svrcell" data-srv="'+esc(currentServers[k].serverId)+'">-</td>'; }
+    cells += '<td class="svrcell tot" data-tot>-</td>';
+    h+='<tr class="clickable" data-id="'+esc(s.id)+'" title="클릭하면 서버별 소켓 상세">'+
+       '<td class="cb"><input type="checkbox" class="cbRow" checked></td>'+
+       '<td><span class="rowdot" data-dot></span><span class="nm">'+esc(s.name||s.id)+'</span></td>'+
+       '<td class="mono">'+bulkEpText(s)+'</td>'+ cells +'</tr>';
+  }
+  // 서버별 합계 푸터
+  var foot='<tfoot><tr><td colspan="3" class="totlabel">서버 합계 (조회한 원천사 기준)</td>';
+  for(var f=0;f<currentServers.length;f++){ foot += '<td class="svrcell" data-srvtot="'+esc(currentServers[f].serverId)+'">-</td>'; }
+  foot += '<td class="svrcell tot" data-granttot>-</td></tr></tfoot>';
+  h+='</tbody>'+foot+'</table></div>';
+  h+='<div class="updated" style="margin-top:10px">범례: <span class="mini ok">송·N</span> 송신 세션 N개 · <span class="mini ok">수·N</span> 수신 LISTEN + 세션 N개 · <span class="mini no">수·N</span> LISTEN 안 함 · <span class="mini err">⚠</span> 서버 점검 실패</div>';
+  wrap.innerHTML=h;
+  var cbAll=$('cbAll');
+  cbAll.onclick=function(){ var cbs=wrap.querySelectorAll('.cbRow'); for(var q=0;q<cbs.length;q++) cbs[q].checked=cbAll.checked; };
+  // 행 클릭 → 서버별 소켓 상세 (체크박스 클릭은 제외)
+  wrap.querySelector('tbody').onclick=function(ev){
+    var el=ev.target;
+    if(el && (el.type==='checkbox' || el.className==='cbRow')) return;
+    var tr=el; while(tr && tr.tagName!=='TR'){ tr=tr.parentNode; }
+    if(!tr || !tr.getAttribute || !tr.getAttribute('data-id')) return;
+    toggleRowDetail(tr);
+  };
+}
+
+function findRow(wrap, id){
+  var rows=wrap.querySelectorAll('tbody tr');
+  for(var i=0;i<rows.length;i++){ if(rows[i].getAttribute('data-id')===id) return rows[i]; }
+  return null;
+}
+
+function runBulkCheck(){
+  var wrap=$('bulkWrap'), rows=wrap.querySelectorAll('tbody tr'), ids=[];
+  for(var i=0;i<rows.length;i++){ var cb=rows[i].querySelector('.cbRow'); if(cb&&cb.checked) ids.push(rows[i].getAttribute('data-id')); }
+  if(!ids.length){ alert('조회할 원천사를 선택하세요.'); return; }
+  var btn=$('checkAll'), old=btn.textContent; btn.disabled=true; btn.textContent='조회 중...';
+  for(var r=0;r<rows.length;r++){
+    var cb2=rows[r].querySelector('.cbRow');
+    if(cb2&&cb2.checked){
+      rows[r].querySelector('[data-dot]').className='rowdot';
+      var cs=rows[r].querySelectorAll('.svrcell'); for(var c=0;c<cs.length;c++) cs[c].innerHTML='<span class="mini mut">…</span>';
+    }
+  }
+  fetch('/api/checkall?biz='+encodeURIComponent(currentBiz)+'&ids='+encodeURIComponent(ids.join(',')))
+    .then(function(x){return x.json();}).then(function(d){
+      btn.disabled=false; btn.textContent=old;
+      if(d.error){ alert('조회 실패: '+d.error); return; }
+      fillBulk(d);
+      statusSnapshot=copyMap(curOverall);   // 수동 조회는 기준점만 갱신(알람 없음)
+      if(currentView==='history') loadHistoryView();
+    }).catch(function(e){ btn.disabled=false; btn.textContent=old; alert(String(e)); });
+}
+
+function copyMap(m){ var o={}; for(var k in m) o[k]=m[k]; return o; }
+function koStatus(s){ return s==='ok'?'정상':(s==='bad'?'장애':(s==='warn'?'주의':'-')); }
+function nowTime(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+function nameOf(id){ for(var i=0;i<currentSources.length;i++){ if(currentSources[i].id===id) return currentSources[i].name||id; } return id; }
+
+// ---- 행 클릭 → 서버별 소켓 상세 (단건 /api/check 재사용) ----
+function toggleRowDetail(tr){
+  var id=tr.getAttribute('data-id');
+  var nxt=tr.nextSibling; while(nxt && nxt.nodeType!==1) nxt=nxt.nextSibling;
+  if(nxt && nxt.className==='detailrow'){ nxt.parentNode.removeChild(nxt); return; }
+  var cols=3+currentServers.length+1;
+  var dr=document.createElement('tr'); dr.className='detailrow';
+  dr.innerHTML='<td colspan="'+cols+'"><div class="detailbox"><span class="spin"></span> 서버별 상세 불러오는 중...</div></td>';
+  tr.parentNode.insertBefore(dr, tr.nextSibling);
+  var s=null; for(var i=0;i<currentSources.length;i++){ if(currentSources[i].id===id){ s=currentSources[i]; break; } }
+  fetch('/api/check?biz='+encodeURIComponent(currentBiz)+'&id='+encodeURIComponent(id))
+    .then(function(r){return r.json();}).then(function(d){
+      var box=dr.querySelector('.detailbox');
+      if(d.error){ box.innerHTML='<div class="msg error">'+esc(d.error)+'</div>'; return; }
+      box.innerHTML=sourceDetailHtml(d.source, d.results||[]);
+    }).catch(function(e){ dr.querySelector('.detailbox').innerHTML='<div class="msg error">'+esc(String(e))+'</div>'; });
+}
+function sourceDetailHtml(source, results){
+  var h='<div class="grid">';
+  for(var j=0;j<results.length;j++){ h+=card(results[j], source); }
+  return h+'</div>';
+}
+
+// ---- 자동 주기 점검 + 상태변화 알람 ----
+$('autoChk').onchange=function(){ if(this.checked) startAuto(); else stopAuto(); };
+$('autoInt').onchange=function(){ if(autoTimer){ stopAuto(true); startAuto(); } };
+function startAuto(){
+  var sec=parseInt($('autoInt').value,10)||30;
+  if($('autoChk')) $('autoChk').checked=true;
+  autoTick();
+  autoTimer=setInterval(autoTick, sec*1000);
+  updateAutoInfo();
+}
+function stopAuto(keepChk){
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+  if(!keepChk && $('autoChk')) $('autoChk').checked=false;
+  var ai=$('autoInfo'); if(ai) ai.innerHTML='';
+}
+function updateAutoInfo(t){
+  var ai=$('autoInfo'); if(!ai) return;
+  ai.innerHTML='<span class="live"><span class="d"></span>자동 점검 ON</span> · 주기 '+$('autoInt').value+'초'+(t?' · 마지막 '+t:'');
+}
+function autoTick(){
+  var wrap=$('bulkWrap'), rows=wrap.querySelectorAll('tbody tr[data-id]'), ids=[];
+  for(var i=0;i<rows.length;i++){ var cb=rows[i].querySelector('.cbRow'); if(cb&&cb.checked) ids.push(rows[i].getAttribute('data-id')); }
+  if(!ids.length){ updateAutoInfo(nowTime()); return; }
+  fetch('/api/checkall?biz='+encodeURIComponent(currentBiz)+'&ids='+encodeURIComponent(ids.join(','))+'&auto=1')
+    .then(function(x){return x.json();}).then(function(d){
+      if(d.error) return;
+      fillBulk(d);
+      detectChanges();
+      updateAutoInfo(nowTime());
+    }).catch(function(){});
+}
+function detectChanges(){
+  var changes=[];
+  for(var id in curOverall){
+    var oldv=statusSnapshot[id], nv=curOverall[id];
+    if(oldv!==undefined && oldv!==nv){ changes.push({id:id,from:oldv,to:nv,name:nameOf(id)}); flashRow(id); }
+  }
+  statusSnapshot=copyMap(curOverall);
+  if(changes.length){ showToast(changes); if(currentView==='history') loadHistoryView(); }
+}
+function flashRow(id){
+  var tr=findRow($('bulkWrap'), id); if(!tr) return;
+  tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
+}
+function showToast(changes){
+  var t=$('toast'), html='';
+  for(var i=0;i<changes.length;i++){ var c=changes[i]; var cls=(c.to==='bad')?'bad':'';
+    html+='<div class="t '+cls+'">⚠ <b>'+esc(c.name)+'</b> : '+koStatus(c.from)+' → <b>'+koStatus(c.to)+'</b></div>'; }
+  t.innerHTML=html; t.style.display='flex';
+  clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, 12000);
+}
+
+function fillBulk(d){
+  var M=(d.servers||[]).length, res=d.results||[], wrap=$('bulkWrap');
+  var colSend={}, colRecv={}, grandS=0, grandR=0;
+  curOverall={};
+  for(var i=0;i<res.length;i++){
+    var r=res[i], tr=findRow(wrap, r.id); if(!tr) continue;
+    var per=r.servers||[], rowS=0, rowR=0;
+    for(var j=0;j<per.length;j++){
+      var ps=per[j];
+      var cell=tr.querySelector('.svrcell[data-srv="'+cssAttr(ps.serverId)+'"]');
+      if(cell){
+        if(!ps.ok){ cell.innerHTML='<span class="mini err" title="'+esc(ps.error||'')+'">⚠</span>'; }
+        else {
+          // 송신: 판정 대상 아니면(skip) '송·-' 회색
+          var sHtml;
+          if(r.sendApp===false){ sHtml='<span class="mini mut" title="송신 제외(연결유지 아님)">송·-</span>'; }
+          else { var sN=(ps.sendCount!=null)?ps.sendCount:(ps.sendConnected?1:0); sHtml='<span class="mini '+(ps.sendConnected?'ok':'no')+'">송·'+sN+'</span>'; }
+          var rHtml;
+          if(r.recvApp===false){ rHtml='<span class="mini mut">수·-</span>'; }
+          else { var rN=ps.recvEstabCount||0; rHtml='<span class="mini '+(ps.recvListening?'ok':'no')+'">수·'+rN+'</span>'; }
+          cell.innerHTML=sHtml+rHtml;
+        }
+      }
+      if(ps.ok){
+        var sc=(ps.sendCount!=null)?ps.sendCount:(ps.sendConnected?1:0), rc=ps.recvEstabCount||0;
+        rowS+=sc; rowR+=rc;
+        colSend[ps.serverId]=(colSend[ps.serverId]||0)+sc;
+        colRecv[ps.serverId]=(colRecv[ps.serverId]||0)+rc;
+      }
+    }
+    // 원천사별 합계 (실제/설정). 설정갯수(기대치)와 나란히 표시.
+    var totCell=tr.querySelector('[data-tot]');
+    if(totCell){
+      var sT=(r.sendTotal!=null)?r.sendTotal:rowS, sNd=(r.sendNeed!=null)?r.sendNeed:0;
+      var rT=(r.recvTotal!=null)?r.recvTotal:rowR, rNd=(r.recvNeed!=null)?r.recvNeed:0;
+      var sTot = (r.sendApp===false)?'<span class="mini mut">송·-</span>'
+                 :'<span class="mini '+(sNd>0?(sT>=sNd?'ok':'no'):'tt')+'" title="실제/설정">송·'+sT+'/'+sNd+'</span>';
+      var rTot = (r.recvApp===false)?'<span class="mini mut">수·-</span>'
+                 :'<span class="mini '+(rNd>0?(rT>=rNd?'ok':'no'):'tt')+'" title="실제'+(rNd>0?'/설정':'')+'">수·'+rT+(rNd>0?('/'+rNd):'')+'</span>';
+      totCell.innerHTML=sTot+rTot;
+    }
+    grandS+=rowS; grandR+=rowR;
+    // 종합상태: 백엔드가 클러스터(서버 전체) 합산으로 판정한 값 사용
+    var overall = r.status || 'mut';
+    tr.querySelector('[data-dot]').className='rowdot '+overall;
+    curOverall[r.id]=overall;
+  }
+  // 서버별 합계(푸터)
+  for(var k=0;k<(d.servers||[]).length;k++){
+    var sid=d.servers[k].serverId;
+    var fc=wrap.querySelector('[data-srvtot="'+cssAttr(sid)+'"]');
+    if(fc) fc.innerHTML='<span class="mini tt">송·'+(colSend[sid]||0)+'</span><span class="mini tt">수·'+(colRecv[sid]||0)+'</span>';
+  }
+  var gc=wrap.querySelector('[data-granttot]');
+  if(gc) gc.innerHTML='<span class="mini tt">송·'+grandS+'</span><span class="mini tt">수·'+grandR+'</span>';
+}
+function cssAttr(s){ return String(s).replace(/["\\]/g,'\\$&'); }
+
+// ---- 조회 이력 ----
+$('reloadH').onclick = loadHistoryView;
+function loadHistoryView(){
+  var wrap=$('histWrap'); wrap.innerHTML='<div class="msg"><span class="spin"></span>이력 불러오는 중...</div>';
+  fetch('/api/history').then(function(r){return r.json();}).then(function(d){ renderHistory(d.entries||[]); })
+    .catch(function(e){ wrap.innerHTML='<div class="msg error">'+esc(String(e))+'</div>'; });
+}
+function renderHistory(entries){
+  var wrap=$('histWrap'), info=$('histInfo');
+  info.textContent='조회 이력 '+entries.length+'건 (최신순)';
+  if(!entries.length){ wrap.innerHTML='<div class="msg">아직 조회 이력이 없습니다.</div>'; return; }
+  var h='<div class="bwrap-scroll"><table class="btable"><thead><tr>'+
+    '<th>시각</th><th>업무</th><th>구분</th><th>대상</th><th>결과</th><th>상태</th></tr></thead><tbody>';
+  for(var i=0;i<entries.length;i++){
+    var e=entries[i];
+    var st=e.status||'mut';
+    var stTxt = st==='ok'?'정상':(st==='bad'?'장애':(st==='warn'?'주의':'-'));
+    var mode = e.mode==='bulk'?'전체':'단건';
+    h+='<tr>'+
+       '<td class="mono">'+esc(e.time)+'</td>'+
+       '<td>'+esc(e.bizName||e.biz)+'</td>'+
+       '<td><span class="hmode">'+mode+'</span></td>'+
+       '<td class="nm">'+esc(e.target)+'</td>'+
+       '<td>'+esc(e.summary)+'</td>'+
+       '<td><span class="hstat '+st+'">'+stTxt+'</span></td></tr>';
+  }
+  h+='</tbody></table></div>';
+  wrap.innerHTML=h;
+}
+
+// ---- 설정 편집 (원천사 목록 / 서버 / 주기점검) ----
+var setData=null, setBiz='';
+
+function loadSettings(){
+  var wrap=$('setWrap'); wrap.innerHTML='<div class="msg"><span class="spin"></span>설정 불러오는 중...</div>';
+  fetch('/api/config').then(function(r){return r.json();}).then(function(d){
+    if(d.error){ wrap.innerHTML='<div class="msg error">'+esc(d.error)+'</div>'; return; }
+    setData=d;
+    if(!setBiz || !bizExists(setBiz)) setBiz=(currentBiz&&bizExists(currentBiz))?currentBiz:((d.businesses[0]||{}).id||'');
+    renderSettings();
+  }).catch(function(e){ wrap.innerHTML='<div class="msg error">'+esc(String(e))+'</div>'; });
+}
+function bizExists(id){ if(!setData)return false; for(var i=0;i<setData.businesses.length;i++) if(setData.businesses[i].id===id) return true; return false; }
+function setBizObj(){ if(!setData)return null; for(var i=0;i<setData.businesses.length;i++) if(setData.businesses[i].id===setBiz) return setData.businesses[i]; return null; }
+
+// 송신 세션 편집 행: 라벨 / 송신IP / 송신Port / 방식 / 예상세션수
+function sendRowHtml(e){ e=e||{};
+  var mode=e.checkMode||'session';
+  var opt=function(v,l){ return '<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>'; };
+  return '<div class="eprow sendrow">'+
+    '<input class="inp e-label" style="width:80px" placeholder="라벨" value="'+esc(e.label||'')+'">'+
+    '<input class="inp mono e-sendip" style="width:130px" placeholder="송신 IP" value="'+esc(e.sendip||'')+'">'+
+    '<input class="inp mono e-sendport" style="width:80px" placeholder="송신Port" value="'+esc(e.sendport||'')+'">'+
+    '<select class="inp e-mode" style="width:130px" title="송신 점검 방식">'+
+      opt('session','세션(연결유지)')+opt('probe','probe(능동접속)')+opt('skip','제외(비연결)')+
+    '</select>'+
+    '<input class="inp mono e-expsend" style="width:74px" placeholder="예상수" title="예상 송신 세션수(0=미지정)" value="'+esc(e.expectSend||'')+'">'+
+    '<button class="xbtn del-send" title="송신 삭제">×</button></div>';
+}
+// 수신 포트 편집 행: 라벨 / 수신Port / 예상세션수
+function recvRowHtmlS(e){ e=e||{};
+  return '<div class="eprow recvrow">'+
+    '<input class="inp e-label2" style="width:80px" placeholder="라벨" value="'+esc(e.label||'')+'">'+
+    '<input class="inp mono e-recvport" style="width:100px" placeholder="수신Port" value="'+esc(e.recvport||'')+'">'+
+    '<input class="inp mono e-exprecv" style="width:74px" placeholder="예상수" title="예상 수신 세션수(0=미지정)" value="'+esc(e.expectRecv||'')+'">'+
+    '<button class="xbtn del-recv" title="수신 삭제">×</button></div>';
+}
+function srcBlockHtml(s){ s=s||{};
+  var sd=sendsOf(s), rc=recvsOf(s);
+  var sh=''; for(var i=0;i<sd.length;i++) sh+=sendRowHtml(sd[i]);
+  var rh=''; for(var j=0;j<rc.length;j++) rh+=recvRowHtmlS(rc[j]);
+  return '<div class="set-in srcblock">'+
+    '<div class="srchead">'+
+      '<input class="inp s-id" style="width:88px" placeholder="ID" value="'+esc(s.id||'')+'">'+
+      '<input class="inp s-name" style="flex:1;min-width:140px" placeholder="원천사명" value="'+esc(s.name||'')+'">'+
+      '<button class="xbtn del-src" title="원천사 삭제">×</button></div>'+
+    '<div class="set-eps-lbl" style="color:var(--orange-strong)">↗ 송신 세션 (이중화면 여러 개) — 라벨 · 송신IP · 송신Port · 방식 · 예상세션수</div>'+
+    '<div class="sendList">'+sh+'</div>'+
+    '<button class="addbtn add-send" style="margin-top:6px">+ 송신 세션</button>'+
+    '<div class="set-eps-lbl" style="margin-top:14px">↘ 수신 포트 — 라벨 · 수신Port · 예상세션수</div>'+
+    '<div class="recvList">'+rh+'</div>'+
+    '<button class="addbtn add-recv" style="margin-top:6px">+ 수신 포트</button></div>';
+}
+function serverRowHtml(sv){ sv=sv||{};
+  return '<div class="eprow srvrow">'+
+    '<input class="inp v-id" style="width:88px" placeholder="서버ID" value="'+esc(sv.id||'')+'">'+
+    '<input class="inp mono v-host" style="width:128px" placeholder="host" value="'+esc(sv.host||'')+'">'+
+    '<input class="inp mono v-port" style="width:64px" placeholder="22" value="'+esc(sv.sshPort!=null?sv.sshPort:22)+'">'+
+    '<input class="inp v-user" style="width:90px" placeholder="user" value="'+esc(sv.user||'')+'">'+
+    '<input class="inp v-pass" type="password" style="width:110px" placeholder="password" value="'+esc(sv.password||'')+'">'+
+    '<button class="xbtn del-srv" title="서버 삭제">×</button></div>';
+}
+
+function renderSettings(){
+  var d=setData, b=setBizObj(), h='';
+  // 주기 점검 (전역)
+  var m=d.monitor||{}, bizChecks='';
+  for(var i=0;i<d.businesses.length;i++){ var bb=d.businesses[i];
+    var on=(m.businesses&&m.businesses.length)?(m.businesses.indexOf(bb.id)>=0):false;
+    bizChecks+='<label class="setchk" style="margin-right:14px"><input type="checkbox" class="mon-biz" value="'+esc(bb.id)+'"'+(on?' checked':'')+'> '+esc(bb.name||bb.id)+'</label>';
+  }
+  h+='<div class="setcard"><h3>주기 점검 <span class="badge">서버 상시</span></h3>'+
+     '<p class="desc">브라우저 없이 서버가 직접 주기 점검하고, 상태변화 시 알람 로그 파일을 남깁니다. 저장하면 즉시 재기동됩니다.</p>'+
+     '<div class="setrow"><label class="setchk"><input type="checkbox" id="monEnabled"'+(m.enabled?' checked':'')+'> 사용</label>'+
+       '<span style="width:10px"></span>'+
+       '<span class="lab" style="width:auto;margin:0">주기(초)</span><input class="inp mono" id="monInterval" style="width:80px" value="'+esc(m.intervalSec||60)+'">'+
+       '<span class="lab" style="width:auto;margin:0">알람 디렉토리</span><input class="inp mono" id="monAlarmDir" style="width:210px" value="'+esc(m.alarmDir||"alarms")+'"></div>'+
+     '<div class="setrow"><span class="lab">점검 대상 업무 (비우면 전체)</span>'+bizChecks+'</div>'+
+     (m.alarmDirResolved?'<div class="setnote">알람 파일: <b>'+esc(m.alarmDirResolved)+'</b> 아래 alarm-YYYYMMDD.log</div>':'')+
+     '<div class="setbar"><button class="btn-primary" id="saveMon">주기 점검 저장</button><span class="savemsg" id="msgMon"></span></div></div>';
+
+  // 업무 선택
+  var sel='';
+  for(var j=0;j<d.businesses.length;j++){ var bj=d.businesses[j];
+    sel+='<button class="bz'+(bj.id===setBiz?' active':'')+'" data-biz="'+esc(bj.id)+'">'+esc(bj.name||bj.id)+'</button>'; }
+  h+='<div style="margin-top:22px"><div class="set-eps-lbl" style="font-size:13px;color:var(--text-2)">업무 선택 (원천사·서버 편집 대상)</div><div class="setbizsel" id="setBizSel">'+sel+'</div></div>';
+
+  // 원천사 조회 방식 (파일/설정/DB) — DB 정보가 있어도 지금 방식을 고정
+  if(b){
+    var st=b.sourceType;
+    function modeBtn(mode,label,hint){ return '<button class="bz mode-btn'+(st===mode?' active':'')+'" data-mode="'+mode+'" title="'+esc(hint)+'">'+label+'</button>'; }
+    h+='<div class="setcard"><h3>원천사 조회 방식</h3>'+
+       '<p class="desc">이 업무가 원천사 목록을 어디서 가져올지 고릅니다. <b>DB 정보를 저장해 둔 채로 파일/설정을 쓸 수 있습니다</b> — 방식만 바뀌고 데이터는 그대로 남습니다.</p>'+
+       '<div class="setbizsel">'+
+         modeBtn('file','파일 주입','외부 JSON 파일(sourcesFile)에서 로드')+
+         modeBtn('config','설정 내장','config.json 의 sources 사용')+
+         modeBtn('db','DB 조회','oracle.sourcesSql 로 DB 조회')+
+       '</div>'+
+       '<div class="setnote">현재 <b>'+esc(sourceTypeKo(st))+'</b>'+(b.sourceMode?' (고정)':' (자동)')+
+         ' · 파일: '+(b.hasFile?esc(b.sourcesFile):'없음')+
+         ' · 설정: '+(b.hasConfig?'있음':'없음')+
+         ' · DB: '+(b.hasDb?'설정됨':'없음')+'</div>'+
+       '<div class="setbar"><span class="savemsg" id="msgOrigin"></span></div></div>';
+  }
+
+  // DB 접속 정보 (Oracle) — 방식과 무관하게 저장 가능
+  if(b){
+    var o=b.oracle||{};
+    h+='<div class="setcard"><h3>DB 접속 정보 (Oracle)</h3>'+
+       '<p class="desc">DB 조회 방식일 때 사용합니다. 파일/설정 방식이어도 여기 저장해 두면 나중에 방식만 <b>DB 조회</b>로 바꿔 바로 쓸 수 있습니다.</p>'+
+       '<div class="setrow"><span class="lab">JDBC URL</span><input class="inp mono" id="oraUrl" style="flex:1;min-width:300px" placeholder="jdbc:oracle:thin:@host:1521:SID" value="'+esc(o.url||'')+'"></div>'+
+       '<div class="setrow"><span class="lab" style="width:auto;margin:0">User</span><input class="inp" id="oraUser" style="width:140px" value="'+esc(o.user||'')+'">'+
+         '<span class="lab" style="width:auto;margin:0">Password</span><input class="inp" id="oraPass" type="password" style="width:160px" value="'+esc(o.password||'')+'"></div>'+
+       '<div class="setrow"><span class="lab">sourcesSql — id,name,sendip,sendport,recvport (+선택 label, mode) alias 반환. mode 컬럼 S=동기→제외 / A=비동기→세션. 같은 id 여러 행이면 이중화.</span>'+
+         '<textarea id="oraSql" class="inp mono" style="width:100%;height:72px;padding:9px 11px;resize:vertical">'+esc(o.sourcesSql||'')+'</textarea></div>'+
+       '<div class="setbar"><button class="btn-primary" id="saveOra">DB 정보 저장</button><span class="savemsg" id="msgOra"></span></div>'+
+       '<div class="setnote" style="margin-top:14px">로컬에서 DB 조회한 결과를 파일로 뽑아, 그 파일로 주입 방식 전환 후 DB에 없는 항목을 직접 추가할 수 있습니다.</div>'+
+       '<div class="setrow"><span class="lab">내보낼 파일명</span>'+
+         '<input class="inp mono" id="expFile" style="width:240px" value="'+esc(b.sourcesFile||('sources-'+b.id+'.json'))+'">'+
+         '<button class="addbtn" id="exportDb" style="height:38px;border-color:var(--orange-strong);color:var(--orange-strong)">⤓ DB 조회 → 파일로 내보내기</button>'+
+         '<span class="savemsg" id="msgExp"></span></div></div>';
+  }
+
+  // 원천사 목록
+  var typeKo=b?sourceTypeKo(b.sourceType):'';
+  if(b && b.editableSources){
+    var srcsHtml=''; var srcs=b.sources||[];
+    for(var s=0;s<srcs.length;s++) srcsHtml+=srcBlockHtml(srcs[s]);
+    if(!srcs.length) srcsHtml=srcBlockHtml(null);
+    h+='<div class="setcard"><h3>원천사 목록 <span class="badge">'+esc(typeKo)+'</span></h3>'+
+       '<p class="desc">'+(b.sourceType==='file'?('파일 <b>'+esc(b.sourceRef)+'</b> 에 저장됩니다.'):'config 파일에 저장됩니다.')+' 이중화면 [+ 엔드포인트]로 세션을 여러 개. <b>방식</b>: 세션(연결유지, ESTABLISHED 확인) / probe(능동접속) / 제외(비연결유지 — 수신만 확인).</p>'+
+       '<div id="srcList">'+srcsHtml+'</div>'+
+       '<button class="addbtn add-src" style="margin-top:6px">+ 원천사</button>'+
+       '<div class="setbar"><button class="btn-primary" id="saveSrc">원천사 저장</button><span class="savemsg" id="msgSrc"></span></div></div>';
+  } else if(b){
+    h+='<div class="setcard"><h3>원천사 목록 <span class="badge">'+esc(typeKo)+'</span></h3>'+
+       '<div class="setnote warn">이 업무는 DB(oracle) 방식이라 여기서 편집할 수 없습니다. sourcesFile/sources 방식으로 전환하면 편집 가능합니다.</div></div>';
+  }
+
+  // 서버
+  if(b){
+    var svHtml=''; var svs=b.servers||[];
+    for(var v=0;v<svs.length;v++) svHtml+=serverRowHtml(svs[v]);
+    if(!svs.length) svHtml=serverRowHtml(null);
+    h+='<div class="setcard"><h3>점검 대상 서버</h3>'+
+       '<p class="desc">이 업무의 원천사 세션을 확인할 서버(SSH 비밀번호 접속). config 파일에 저장됩니다.</p>'+
+       '<div class="set-eps-lbl">서버ID · host · sshPort · user · password</div>'+
+       '<div id="srvList">'+svHtml+'</div>'+
+       '<button class="addbtn add-srv" style="margin-top:6px">+ 서버</button>'+
+       '<div class="setbar"><button class="btn-primary" id="saveSrv">서버 저장</button><span class="savemsg" id="msgSrv"></span></div></div>';
+  }
+
+  $('setWrap').innerHTML=h;
+  wireSettings();
+}
+
+function hasCls(el,c){ return el && el.classList && el.classList.contains(c); }
+function closestCls(el,c){ while(el && !(el.classList&&el.classList.contains(c))) el=el.parentNode; return el; }
+
+function wireSettings(){
+  var wrap=$('setWrap');
+  var bsel=$('setBizSel');
+  if(bsel) bsel.onclick=function(ev){ var t=ev.target; var b=t.getAttribute&&t.getAttribute('data-biz'); if(b&&b!==setBiz){ setBiz=b; renderSettings(); } };
+  wrap.onclick=function(ev){
+    var t=ev.target;
+    if(hasCls(t,'add-src')){ $('srcList').insertAdjacentHTML('beforeend', srcBlockHtml(null)); }
+    else if(hasCls(t,'del-src')){ var s=closestCls(t,'srcblock'); if(s) s.parentNode.removeChild(s); }
+    else if(hasCls(t,'add-send')){ var blk=closestCls(t,'srcblock'); if(blk) blk.querySelector('.sendList').insertAdjacentHTML('beforeend', sendRowHtml(null)); }
+    else if(hasCls(t,'del-send')){ var e=closestCls(t,'eprow'); if(e) e.parentNode.removeChild(e); }
+    else if(hasCls(t,'add-recv')){ var blk2=closestCls(t,'srcblock'); if(blk2) blk2.querySelector('.recvList').insertAdjacentHTML('beforeend', recvRowHtmlS(null)); }
+    else if(hasCls(t,'del-recv')){ var e2=closestCls(t,'eprow'); if(e2) e2.parentNode.removeChild(e2); }
+    else if(hasCls(t,'add-srv')){ $('srvList').insertAdjacentHTML('beforeend', serverRowHtml(null)); }
+    else if(hasCls(t,'del-srv')){ var r=closestCls(t,'srvrow'); if(r) r.parentNode.removeChild(r); }
+    else if(hasCls(t,'mode-btn')){ var mode=t.getAttribute('data-mode'); if(mode) changeOrigin(mode); }
+  };
+  if($('saveMon')) $('saveMon').onclick=saveMonitor;
+  if($('saveSrc')) $('saveSrc').onclick=saveSources;
+  if($('saveSrv')) $('saveSrv').onclick=saveServers;
+  if($('saveOra')) $('saveOra').onclick=saveOracle;
+  if($('exportDb')) $('exportDb').onclick=exportDbToFile;
+}
+
+function exportDbToFile(){
+  var b=setBizObj(); if(!b) return;
+  var file=$('expFile').value.trim() || ('sources-'+setBiz+'.json');
+  var warn = b.hasFile ? ('\n\n주의: '+file+' 이(가) 이미 있으면 DB 최신 내용으로 덮어씁니다. (기존 파일에 수동 추가한 항목은 사라집니다)') : '';
+  if(!window.confirm('로컬 DB를 조회해 '+file+' 로 저장하고 파일 방식으로 전환합니다.'+warn+'\n\n계속할까요?')) return;
+  setMsg('msgExp','DB 조회 중... (로컬 DB 접속, 잠시 대기)',false);
+  fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({section:'exportDb',biz:setBiz,file:file})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){ setMsg('msgExp',d.error,true); return; }
+      alert(d.msg||'완료');
+      loadSettings();
+      if(currentBiz===setBiz) loadSources(false);
+    }).catch(function(e){ setMsg('msgExp',String(e),true); });
+}
+
+function changeOrigin(mode){
+  var b=setBizObj(); if(!b || mode===b.sourceType) return;
+  postConfig({section:'origin', biz:setBiz, mode:mode}, 'msgOrigin', function(){
+    loadSettings();                              // 방식 변경 → 편집가능/원천사 목록 재렌더
+    if(currentBiz===setBiz) loadSources(false);  // 조회화면 출처표시도 갱신
+  });
+}
+function saveOracle(){
+  var o={ url:$('oraUrl').value.trim(), user:$('oraUser').value.trim(),
+          password:$('oraPass').value, sourcesSql:$('oraSql').value.trim() };
+  postConfig({section:'oracle', biz:setBiz, oracle:o}, 'msgOra', null);
+}
+
+function collectSources(){
+  var out=[], blocks=$('srcList').querySelectorAll('.srcblock');
+  for(var i=0;i<blocks.length;i++){ var b=blocks[i];
+    var id=b.querySelector('.s-id').value.trim(), name=b.querySelector('.s-name').value.trim();
+    if(!id && !name) continue;
+    var sends=[], srows=b.querySelectorAll('.sendrow');
+    for(var j=0;j<srows.length;j++){ var r=srows[j];
+      var mSel=r.querySelector('.e-mode');
+      var e={ label:r.querySelector('.e-label').value.trim(), sendip:r.querySelector('.e-sendip').value.trim(),
+              sendport:r.querySelector('.e-sendport').value.trim(),
+              checkMode: mSel?mSel.value:'session',
+              expectSend: parseInt(r.querySelector('.e-expsend').value,10)||0 };
+      if(e.sendip||e.sendport) sends.push(e);
+    }
+    var recvs=[], rrows=b.querySelectorAll('.recvrow');
+    for(var k=0;k<rrows.length;k++){ var r2=rrows[k];
+      var e2={ label:r2.querySelector('.e-label2').value.trim(), recvport:r2.querySelector('.e-recvport').value.trim(),
+               expectRecv: parseInt(r2.querySelector('.e-exprecv').value,10)||0 };
+      if(e2.recvport) recvs.push(e2);
+    }
+    out.push({ id:id, name:name||id, sends:sends, recvs:recvs });
+  }
+  return out;
+}
+function collectServers(){
+  var out=[], rows=$('srvList').querySelectorAll('.srvrow');
+  for(var i=0;i<rows.length;i++){ var r=rows[i];
+    var id=r.querySelector('.v-id').value.trim(), host=r.querySelector('.v-host').value.trim();
+    if(!id && !host) continue;
+    out.push({ id:id, host:host, sshPort:parseInt(r.querySelector('.v-port').value,10)||22,
+      user:r.querySelector('.v-user').value.trim(), password:r.querySelector('.v-pass').value });
+  }
+  return out;
+}
+function saveSources(){
+  var srcs=collectSources();
+  for(var i=0;i<srcs.length;i++) if(!srcs[i].id){ setMsg('msgSrc','원천사 ID를 모두 입력하세요.',true); return; }
+  postConfig({section:'sources', biz:setBiz, sources:srcs}, 'msgSrc', function(){ if(currentBiz===setBiz) loadSources(false); });
+}
+function saveServers(){
+  var svs=collectServers();
+  for(var i=0;i<svs.length;i++) if(!svs[i].id||!svs[i].host){ setMsg('msgSrv','서버 ID와 host를 입력하세요.',true); return; }
+  postConfig({section:'servers', biz:setBiz, servers:svs}, 'msgSrv', function(){ if(currentBiz===setBiz){ currentServers=[]; loadSshStatus(); } });
+}
+function saveMonitor(){
+  var bizs=[], cbs=$('setWrap').querySelectorAll('.mon-biz');
+  for(var i=0;i<cbs.length;i++) if(cbs[i].checked) bizs.push(cbs[i].value);
+  var mon={ enabled:$('monEnabled').checked, intervalSec:parseInt($('monInterval').value,10)||60,
+            alarmDir:$('monAlarmDir').value.trim()||'alarms', businesses:bizs };
+  postConfig({section:'monitor', monitor:mon}, 'msgMon', null);
+}
+function postConfig(body, msgId, after){
+  setMsg(msgId,'저장 중...',false);
+  fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error){ setMsg(msgId,d.error,true); return; }
+      setMsg(msgId, d.msg||'저장 완료', false);
+      if(after) after();
+    }).catch(function(e){ setMsg(msgId,String(e),true); });
+}
+function setMsg(id,txt,err){ var el=$(id); if(!el)return; el.className='savemsg'+(err?' err':''); el.textContent=txt;
+  if(!err && txt && txt!=='저장 중...'){ clearTimeout(el._h); el._h=setTimeout(function(){ el.textContent=''; },5000); } }
+
+function esc(s){ return String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+loadEnv();
+loadBusinesses();
+</script>
+</body>
+</html>

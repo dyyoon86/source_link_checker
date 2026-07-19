@@ -1,0 +1,46 @@
+{
+  "env": { "name": "운영", "tag": "PROD", "color": "red" },
+  "web": { "port": 8096 },
+  "ssh": { "connectTimeoutSec": 6, "execTimeoutSec": 10 },
+  "monitor": {
+    "_comment": "서버 상시 주기 점검. enabled=true 면 브라우저 없이도 intervalSec 마다 SSH 점검하고, 상태변화(정상/주의/장애) 시 alarmDir 에 alarm-YYYYMMDD.log 로 한 줄씩 기록. businesses 를 비우면 전체 업무 대상.",
+    "enabled": true,
+    "intervalSec": 60,
+    "alarmDir": "alarms",
+    "businesses": ["firm", "va"]
+  },
+  "_comment": "운영(FEP)은 DB 접속이 안 되므로 원천사 목록을 sourcesFile(외부파일)로 주입한다. 파일만 수정하고 웹에서 '재갱신'하면 반영됨(재시작 불필요). oracle 블록은 참고용으로 남겨두지만 sourcesFile 이 우선하므로 실제로는 사용되지 않는다.",
+  "businesses": [
+    {
+      "id": "firm",
+      "name": "펌뱅킹",
+      "sourcesFile": "sources-prod-firm.json",
+      "oracle": {
+        "url": "jdbc:oracle:thin:@10.0.0.10:1521:FIRMDB",
+        "user": "firmuser",
+        "password": "firmpassword",
+        "sourcesSql": "SELECT SRC_ID AS id, SRC_NAME AS name, SEND_IP AS sendip, SEND_PORT AS sendport, RECV_PORT AS recvport FROM TB_FIRM_SOURCE ORDER BY SRC_NAME"
+      },
+      "servers": [
+        { "id": "FIRM-1", "host": "10.7.1.10", "sshPort": 22, "user": "root", "password": "firmpw1" },
+        { "id": "FIRM-2", "host": "10.7.1.11", "sshPort": 22, "user": "root", "password": "firmpw2" },
+        { "id": "FIRM-3", "host": "10.7.1.12", "sshPort": 22, "user": "root", "password": "firmpw3" }
+      ]
+    },
+    {
+      "id": "va",
+      "name": "가상계좌",
+      "sourcesFile": "sources-prod-va.json",
+      "oracle": {
+        "url": "jdbc:oracle:thin:@10.0.0.11:1521:VADB",
+        "user": "vauser",
+        "password": "vapassword",
+        "sourcesSql": "SELECT SRC_ID AS id, SRC_NAME AS name, SEND_IP AS sendip, SEND_PORT AS sendport, RECV_PORT AS recvport FROM TB_VA_SOURCE ORDER BY SRC_NAME"
+      },
+      "servers": [
+        { "id": "VA-1", "host": "10.7.2.10", "sshPort": 22, "user": "root", "password": "vapw1" },
+        { "id": "VA-2", "host": "10.7.2.11", "sshPort": 22, "user": "root", "password": "vapw2" }
+      ]
+    }
+  ]
+}

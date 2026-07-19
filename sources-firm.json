@@ -1,0 +1,27 @@
+{
+  "_comment": "펌뱅킹 원천사 목록 (외부 파일 주입). 송신(sends)과 수신(recvs)을 분리. 이 파일만 수정하고 웹에서 '재갱신' 하면 반영.",
+  "_format": "각 원천사: { id, name, sends:[{label,sendip,sendport,checkMode,expectSend}], recvs:[{label,recvport,expectRecv}] }. checkMode: session(ESTABLISHED,연결유지) / probe(능동접속) / skip(제외). expectSend/expectRecv=예상 세션수(0=미지정). 레거시 endpoints/flat 형식도 자동 인식.",
+  "sources": [
+    {
+      "id": "001",
+      "name": "우리은행",
+      "sends": [ { "label": "", "sendip": "10.20.30.1", "sendport": "6001", "checkMode": "session", "expectSend": 1 } ],
+      "recvs": [ { "label": "", "recvport": "8001", "expectRecv": 0 } ]
+    },
+    {
+      "id": "002",
+      "name": "국민은행 (송신 이중화, 수신 1포트)",
+      "sends": [
+        { "label": "1번회선", "sendip": "10.20.30.2", "sendport": "6002", "checkMode": "session", "expectSend": 1 },
+        { "label": "2번회선", "sendip": "10.40.30.2", "sendport": "6012", "checkMode": "session", "expectSend": 1 }
+      ],
+      "recvs": [ { "label": "수신", "recvport": "8002", "expectRecv": 2 } ]
+    },
+    {
+      "id": "003",
+      "name": "하나은행 (동기=제외 예시)",
+      "sends": [ { "label": "동기", "sendip": "10.20.30.3", "sendport": "6003", "checkMode": "skip", "expectSend": 0 } ],
+      "recvs": [ { "label": "", "recvport": "8003", "expectRecv": 1 } ]
+    }
+  ]
+}
