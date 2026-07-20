@@ -710,13 +710,20 @@ function render(d){
           '<div class="id">'+esc(s.id)+'</div></div>'+
         '<div class="endpoints">'+epHero+'</div></div>';
 
-  // 종합 상태 배지 (백엔드 클러스터 판정)
-  html+=statusPill(d.status);
-  // Summary tiles: 클러스터 합산 실제/설정 (초과/부족이면 노랑)
+  // Summary 상태 계산 (초과=노랑/부족=주황/없음=빨강). 유효한 백엔드 4-상태 우선, 아니면 설정+실제로 계산.
   var sendApp = sendApplicableOf(s), recvApp = recvApplicableOf(s);
   var sNeed=sendNeedOf(s), rNeed=recvNeedOf(s);
-  var sSt=d.sendState||(!sendApp?'na':(sendTotal===0?'absent':(sNeed>0?(sendTotal===sNeed?'ok':(sendTotal>sNeed?'excess':'short')):'ok')));
-  var rSt=d.recvState||(!recvApp?'na':(rNeed>0?(recvTotal===0?'absent':(recvTotal===rNeed?'ok':(recvTotal>rNeed?'excess':'short'))):(recvTotal>0?'ok':'absent')));
+  var v4t=function(x){ return x==='ok'||x==='excess'||x==='short'||x==='absent'||x==='na'; };
+  var sExpT=sendsOf(s).some(function(e){return (e.expectSend||0)>0;});
+  var rExpT=recvsOf(s).some(function(e){return (e.expectRecv||0)>0;});
+  var sSt=(d.sendState&&v4t(d.sendState))?d.sendState:(!sendApp?'na':(sendTotal===0?'absent':(sExpT?(sendTotal===sNeed?'ok':(sendTotal>sNeed?'excess':'short')):'ok')));
+  var rSt=(d.recvState&&v4t(d.recvState))?d.recvState:(!recvApp?'na':(rExpT?(recvTotal===0?'absent':(recvTotal===rNeed?'ok':(recvTotal>rNeed?'excess':'short'))):(recvTotal>0?'ok':'absent')));
+  // 종합 상태(배지): 유효한 status 우선, 아니면 축 상태 최악
+  var vStatus=function(x){ return x==='ok'||x==='excess'||x==='short'||x==='bad'||x==='mut'; };
+  var overallS=(d.status&&vStatus(d.status))?d.status:null;
+  if(!overallS){ var sevf=function(x){return x==='absent'?4:(x==='short'?3:(x==='excess'?2:(x==='ok'?1:0)));};
+    var mv=Math.max(sevf(sSt),sevf(rSt)); overallS=(sSt==='na'&&rSt==='na')?'mut':(mv>=4?'bad':(mv===3?'short':(mv===2?'excess':(mv===1?'ok':'mut')))); }
+  html+=statusPill(overallS);
   html+='<div class="summary">'+
         (sendApp ? tileFracState('송신 세션 (실제/설정)', sendTotal, sNeed, sSt) : tileTxt('송신', '해당없음', 'mut'))+
         (recvApp ? (rNeed>0 ? tileFracState('수신 세션 (실제/설정)', recvTotal, rNeed, rSt) : tileNum('수신 세션', recvTotal, recvTotal>0?'ok':'warn')) : tileTxt('수신', '해당없음', 'mut'))+
@@ -1102,9 +1109,15 @@ function fillBulk(d){
     var sT = (r.sendTotal!=null)?r.sendTotal:rowS;
     var rT = (r.recvTotal!=null)?r.recvTotal:rowR;
     var anyListen=false; for(var li=0;li<per.length;li++){ if(per[li].ok && per[li].recvListening) anyListen=true; }
-    // 축 상태: ok(정확)/excess(초과 노랑)/short(부족 주황)/absent(없음 빨강). 백엔드 state 우선, 없으면 합산 계산.
-    var sSt = r.sendState || (!sHasSend?'na':(sT===0?'absent':(sNd>0?(sT===sNd?'ok':(sT>sNd?'excess':'short')):'ok')));
-    var rSt = r.recvState || (!rHasRecv?'na':(rNd>0?(rT===0?'absent':(rT===rNd?'ok':(rT>rNd?'excess':'short'))):(anyListen?'ok':'absent')));
+    // 축 상태: ok(정확)/excess(초과 노랑)/short(부족 주황)/absent(없음 빨강).
+    // 유효한 4-상태 백엔드 값이면 사용, 아니면(구버전) 설정+실제 총합으로 직접 계산.
+    var v4=function(s){ return s==='ok'||s==='excess'||s==='short'||s==='absent'||s==='na'; };
+    var sExp = srcObj ? sendsOf(srcObj).some(function(e){return (e.expectSend||0)>0;}) : ((r.sendNeed||0)>0);
+    var rExp = srcObj ? recvsOf(srcObj).some(function(e){return (e.expectRecv||0)>0;}) : ((r.recvNeed||0)>0);
+    var sSt = (r.sendState&&v4(r.sendState)) ? r.sendState
+              : (!sHasSend?'na':(sT===0?'absent':(sExp?(sT===sNd?'ok':(sT>sNd?'excess':'short')):'ok')));
+    var rSt = (r.recvState&&v4(r.recvState)) ? r.recvState
+              : (!rHasRecv?'na':(rExp?(rT===0?'absent':(rT===rNd?'ok':(rT>rNd?'excess':'short'))):(anyListen?'ok':'absent')));
     var stCls=function(s){ return s==='ok'?'ok':(s==='excess'?'excess':(s==='short'?'short':(s==='absent'?'no':'mut'))); };
     // 원천사별 합계 (실제/설정). 초과/부족이면 노랑.
     var totCell=tr.querySelector('[data-tot]');
@@ -1116,8 +1129,9 @@ function fillBulk(d){
       totCell.innerHTML=sTot+rTot;
     }
     grandS+=rowS; grandR+=rowR;
-    // 종합상태: 백엔드 status 우선, 없으면 축 상태 중 최악(장애>부족>초과>정상)
-    var overall = r.status;
+    // 종합상태: 유효한 4단계 status 면 사용, 아니면(구버전 warn 등) 축 상태 중 최악으로 계산
+    var vStatus=function(s){ return s==='ok'||s==='excess'||s==='short'||s==='bad'||s==='mut'; };
+    var overall = (r.status&&vStatus(r.status)) ? r.status : null;
     if(!overall){
       var sev=function(s){ return s==='absent'?4:(s==='short'?3:(s==='excess'?2:(s==='ok'?1:0))); };
       var v=Math.max(sev(sSt),sev(rSt));
