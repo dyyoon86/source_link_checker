@@ -77,6 +77,15 @@ public class SourceLinkChecker {
     //   bizId -> bulkJson 문자열 / bizId -> 갱신시각
     private static final Map<String, String> monitorSnapshot = new java.util.concurrent.ConcurrentHashMap<String, String>();
     private static final Map<String, String> monitorSnapAt = new java.util.concurrent.ConcurrentHashMap<String, String>();
+    // /api/checkall 스로틀: 같은 조회(biz+auto+ids)는 minCheckIntervalMs(기본 1000ms) 내 결과 재사용 + 동시요청 single-flight.
+    //   → 여러 관리자가 동시에 '조회'를 눌러도 실제 SSH 점검은 초당 1건을 넘지 않는다.
+    static class Cached { final String json; final long at; Cached(String j, long a){ json=j; at=a; } }
+    private static final Map<String, Cached> checkCache = new java.util.concurrent.ConcurrentHashMap<String, Cached>();
+    private static final Map<String, Object> checkLocks = new java.util.concurrent.ConcurrentHashMap<String, Object>();
+    private static Object checkLockFor(String key){
+        Object l = checkLocks.get(key); if (l != null) return l;
+        Object n = new Object(); Object p = checkLocks.putIfAbsent(key, n); return p != null ? p : n;
+    }
 
     // =====================================================================
     // 데이터 모델
@@ -471,8 +480,22 @@ public class SourceLinkChecker {
                 }
                 if (sources.isEmpty()) { sendJson(ex, 400, "{\"error\":\"선택된 원천사가 없습니다.\"}"); return; }
 
-                BulkResult br = performBulk(biz, sources, auto);
-                sendJson(ex, 200, bulkJson(br));
+                // 스로틀: 같은 조회(biz+auto+ids)는 minCheckIntervalMs 내면 캐시 결과 재사용(SSH 안 함).
+                //   동시 요청은 lock 으로 직렬화 → 첫 요청만 SSH, 나머지는 그 결과 공유. 실제 점검 ≤ 초당 1건.
+                long minMs = (long) num(asMap(config.get("web")).get("minCheckIntervalMs"), 1000);
+                String key = bizId + "|" + auto + "|" + (idsParam == null ? "" : idsParam);
+                Cached hit = checkCache.get(key);
+                if (hit != null && System.currentTimeMillis() - hit.at < minMs) { sendJson(ex, 200, hit.json); return; }
+
+                String json;
+                synchronized (checkLockFor(key)) {
+                    hit = checkCache.get(key);
+                    if (hit != null && System.currentTimeMillis() - hit.at < minMs) { sendJson(ex, 200, hit.json); return; }
+                    BulkResult br = performBulk(biz, sources, auto);
+                    json = bulkJson(br);
+                    checkCache.put(key, new Cached(json, System.currentTimeMillis()));
+                }
+                sendJson(ex, 200, json);
             } catch (Exception e) {
                 sendJson(ex, 500, "{\"error\":" + jstr(rootMsg(e)) + "}");
             }
