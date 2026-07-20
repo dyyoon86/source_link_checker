@@ -397,7 +397,13 @@ public class SourceLinkChecker {
                 }
                 // 클러스터(서버 전체) 합산 종합상태
                 SrcStat stat = computeSrcStat(results);
-                sb.append("],\"status\":").append(jstr(stat.status)).append("}");
+                sb.append("],\"status\":").append(jstr(stat.status))
+                  .append(",\"sendState\":").append(jstr(stat.sendState))
+                  .append(",\"recvState\":").append(jstr(stat.recvState))
+                  .append(",\"sendTotal\":").append(stat.sendTotal)
+                  .append(",\"sendNeed\":").append(stat.sendNeed)
+                  .append(",\"recvTotal\":").append(stat.recvTotal)
+                  .append(",\"recvNeed\":").append(stat.recvNeed).append("}");
                 sendJson(ex, 200, sb.toString());
 
                 // 이력 기록
@@ -635,6 +641,8 @@ public class SourceLinkChecker {
               .append(",\"sessSum\":").append(sr.sessSum)
               .append(",\"errCnt\":").append(sr.errCnt)
               .append(",\"status\":").append(jstr(sr.status))
+              .append(",\"sendState\":").append(jstr(sr.stat.sendState))
+              .append(",\"recvState\":").append(jstr(sr.stat.recvState))
               .append(",\"sendTotal\":").append(sr.stat.sendTotal)
               .append(",\"sendNeed\":").append(sr.stat.sendNeed)
               .append(",\"recvTotal\":").append(sr.stat.recvTotal)
@@ -1422,10 +1430,10 @@ public class SourceLinkChecker {
         return "-";
     }
 
-    /** 카운트로 종합 상태 판정 (프론트와 동일 규칙) */
-    /** 원천사 클러스터(서버 전체) 합산 상태. */
+    /** 원천사 클러스터(서버 전체) 합산 상태. sendState/recvState: na/ok/mismatch/absent. */
     static class SrcStat {
         String status = "mut";
+        String sendState = "na", recvState = "na";
         int errCnt = 0;
         boolean sendApp = false, recvApp = false;
         int sendTotal = 0, sendNeed = 0, recvTotal = 0, recvNeed = 0;
@@ -1433,29 +1441,31 @@ public class SourceLinkChecker {
 
     /**
      * 원천사 종합 상태를 '클러스터(서버 전체) 합산' 으로 판정한다.
-     * 세션이 어느 서버에 있든, 엔드포인트별로 서버 전체를 합산해 기대 세션수를 채우면 정상(ok).
-     * → 액티브-스탠바이(한 서버에만 세션)여도, 원천사가 기대만큼 붙어있으면 초록불.
+     * 세션이 어느 서버에 있든, 엔드포인트별로 서버 전체를 합산해 기대 세션수와 비교:
+     *   - 설정값(expect>0)이 있으면 '정확히 일치'해야 정상. 부족/초과면 주의(warn).
+     *   - 설정값이 없으면(미지정) 1개 이상이면 정상.
+     * 색: 모두 일치=ok(초록), 부족/초과 섞임=mismatch=warn(노랑), 완전 없음=absent=bad(빨강).
      */
     private static SrcStat computeSrcStat(List<CheckResult> results) {
         SrcStat st = new SrcStat();
         int M = results.size();
-        LinkedHashMap<String, int[]> sendAgg = new LinkedHashMap<String, int[]>();   // sendip:port -> [need, total]
-        LinkedHashMap<String, int[]> recvAgg = new LinkedHashMap<String, int[]>();   // recvport   -> [need, total, anyListen]
+        // sendkey -> [expect(>0 명시, -1 미지정), total, probe(0/1)]
+        LinkedHashMap<String, int[]> sendAgg = new LinkedHashMap<String, int[]>();
+        // recvport -> [expect(>0 명시, -1 미지정), total, anyListen(0/1)]
+        LinkedHashMap<String, int[]> recvAgg = new LinkedHashMap<String, int[]>();
         for (CheckResult r : results) {
             if (!r.ok) { st.errCnt++; continue; }
             for (EpResult er : r.eps) {
                 if (er.sendChecked()) {
                     String k = er.sendip + ":" + er.sendport;
-                    int need = er.isProbe() ? 1 : (er.expectSend > 0 ? er.expectSend : 1);
                     int[] a = sendAgg.get(k);
-                    if (a == null) sendAgg.put(k, a = new int[]{ need, 0 });
+                    if (a == null) sendAgg.put(k, a = new int[]{ er.isProbe() ? 0 : (er.expectSend > 0 ? er.expectSend : -1), 0, er.isProbe() ? 1 : 0 });
                     a[1] += er.sendCount;
                 }
                 if (er.hasRecv()) {
-                    int need = er.expectRecv > 0 ? er.expectRecv : 0;   // 0 = LISTEN 만 확인
                     int[] b = recvAgg.get(er.recvport);
-                    if (b == null) recvAgg.put(er.recvport, b = new int[]{ need, 0, 0 });
-                    b[0] = Math.max(b[0], need);
+                    if (b == null) recvAgg.put(er.recvport, b = new int[]{ er.expectRecv > 0 ? er.expectRecv : -1, 0, 0 });
+                    if (er.expectRecv > 0) b[0] = Math.max(b[0] < 0 ? 0 : b[0], er.expectRecv);
                     b[1] += er.recvEstabCount;
                     if (er.recvListening) b[2] = 1;
                 }
@@ -1463,16 +1473,37 @@ public class SourceLinkChecker {
         }
         st.sendApp = !sendAgg.isEmpty();
         st.recvApp = !recvAgg.isEmpty();
-        boolean sendAllMet = true, sendAnyPresent = false;
-        for (int[] a : sendAgg.values()) { st.sendNeed += a[0]; st.sendTotal += a[1]; if (a[1] < a[0]) sendAllMet = false; if (a[1] > 0) sendAnyPresent = true; }
-        boolean recvAllMet = true, recvAnyListen = false;
-        for (int[] b : recvAgg.values()) { st.recvNeed += b[0]; st.recvTotal += b[1]; boolean met = b[2] == 1 && (b[0] <= 0 || b[1] >= b[0]); if (!met) recvAllMet = false; if (b[2] == 1) recvAnyListen = true; }
+        // 송신 엔드포인트별 상태: 0=OK, 1=MISMATCH(부족/초과), 2=ABSENT
+        int sOk = 0, sMis = 0, sAbs = 0;
+        for (int[] a : sendAgg.values()) {
+            int exp = a[0], total = a[1], probe = a[2];
+            st.sendTotal += total; st.sendNeed += (exp > 0 ? exp : 1);
+            int state;
+            if (probe == 1) state = total >= 1 ? 0 : 2;
+            else if (exp > 0) state = (total == exp) ? 0 : (total == 0 ? 2 : 1);   // 정확히 일치만 OK, 부족/초과=MIS
+            else state = total >= 1 ? 0 : 2;
+            if (state == 0) sOk++; else if (state == 1) sMis++; else sAbs++;
+        }
+        int rOk = 0, rMis = 0, rAbs = 0;
+        for (int[] b : recvAgg.values()) {
+            int exp = b[0], total = b[1], lis = b[2];
+            st.recvTotal += total; st.recvNeed += (exp > 0 ? exp : 0);
+            int state;
+            if (lis == 0) state = 2;                              // 닫힘
+            else if (exp > 0) state = (total == exp) ? 0 : 1;    // 리슨중: 정확히 = OK, 부족/초과=MIS
+            else state = 0;                                       // 미지정: 리슨이면 OK
+            if (state == 0) rOk++; else if (state == 1) rMis++; else rAbs++;
+        }
+        st.sendState = !st.sendApp ? "na" : (sMis == 0 && sAbs == 0 ? "ok" : (sOk == 0 && sMis == 0 ? "absent" : "mismatch"));
+        st.recvState = !st.recvApp ? "na" : (rMis == 0 && rAbs == 0 ? "ok" : (rOk == 0 && rMis == 0 ? "absent" : "mismatch"));
 
         if (M == 0 || (!st.sendApp && !st.recvApp)) { st.status = "mut"; return st; }
-        if (st.errCnt == 0 && (!st.sendApp || sendAllMet) && (!st.recvApp || recvAllMet)) { st.status = "ok"; return st; }
-        boolean sendAbsent = !st.sendApp || !sendAnyPresent;
-        boolean recvAbsent = !st.recvApp || !recvAnyListen;
-        if (st.errCnt == 0 && sendAbsent && recvAbsent) { st.status = "bad"; return st; }
+        boolean sendOk = st.sendState.equals("ok") || st.sendState.equals("na");
+        boolean recvOk = st.recvState.equals("ok") || st.recvState.equals("na");
+        if (st.errCnt == 0 && sendOk && recvOk) { st.status = "ok"; return st; }
+        boolean sendDown = st.sendState.equals("na") || st.sendState.equals("absent");
+        boolean recvDown = st.recvState.equals("na") || st.recvState.equals("absent");
+        if (st.errCnt == 0 && sendDown && recvDown) { st.status = "bad"; return st; }
         st.status = "warn";
         return st;
     }

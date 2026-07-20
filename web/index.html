@@ -260,6 +260,7 @@
     border-radius:var(--r-sm);padding:2px 6px;margin:0 2px;border:1px solid var(--line);}
   .mini.ok{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
   .mini.no{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .mini.warn{background:var(--amber-5);color:var(--amber);border-color:var(--amber-20);}
   .mini.mut{background:var(--neutral-5);color:var(--text-4);}
   .mini.err{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
   .mini.tt{background:var(--panel2,#eef1f5);background:#eef1f5;color:var(--text-2);border-color:var(--line);}
@@ -342,6 +343,9 @@
   .setbizsel .bz.active{background:var(--surface);color:var(--text-1);box-shadow:0 1px 2px rgba(0,0,0,.06);}
   .setchk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);font-weight:600;cursor:pointer;}
   .setchk input{width:16px;height:16px;accent-color:var(--orange-strong);}
+  /* 저장 버튼 하단 고정 (긴 목록에서 스크롤 없이 저장) */
+  .setbar-sticky{position:sticky;bottom:8px;z-index:6;margin-top:10px;padding:10px 12px;border-radius:var(--r-md);
+    background:var(--surface);border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.10);}
 </style>
 </head>
 <body>
@@ -679,12 +683,14 @@ function render(d){
 
   // 종합 상태 배지 (백엔드 클러스터 판정)
   html+=statusPill(d.status);
-  // Summary tiles: 클러스터 합산 실제/설정
+  // Summary tiles: 클러스터 합산 실제/설정 (초과/부족이면 노랑)
   var sendApp = sendApplicableOf(s), recvApp = recvApplicableOf(s);
   var sNeed=sendNeedOf(s), rNeed=recvNeedOf(s);
+  var sSt=d.sendState||(!sendApp?'na':(sNeed>0?(sendTotal===sNeed?'ok':(sendTotal===0?'absent':'mismatch')):(sendTotal>0?'ok':'absent')));
+  var rSt=d.recvState||(!recvApp?'na':(recvTotal>0?(rNeed>0?(recvTotal===rNeed?'ok':'mismatch'):'ok'):'absent'));
   html+='<div class="summary">'+
-        (sendApp ? tileFrac('송신 세션 (실제/설정)', sendTotal, sNeed) : tileTxt('송신', '해당없음', 'mut'))+
-        (recvApp ? (rNeed>0 ? tileFrac('수신 세션 (실제/설정)', recvTotal, rNeed) : tileNum('수신 세션', recvTotal, recvTotal>0?'ok':'warn')) : tileTxt('수신', '해당없음', 'mut'))+
+        (sendApp ? tileFracState('송신 세션 (실제/설정)', sendTotal, sNeed, sSt) : tileTxt('송신', '해당없음', 'mut'))+
+        (recvApp ? (rNeed>0 ? tileFracState('수신 세션 (실제/설정)', recvTotal, rNeed, rSt) : tileNum('수신 세션', recvTotal, recvTotal>0?'ok':'warn')) : tileTxt('수신', '해당없음', 'mut'))+
         (total>1 ? tileNum('점검 서버', total, 'ok') : '')+
         (errCnt? tileNum('점검 실패', errCnt, 'bad') : '')+
         '</div>';
@@ -715,9 +721,9 @@ function tileTxt(lbl, txt, klass){
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
          '<div class="t-val" style="font-size:18px">'+txt+'</div></div>';
 }
-// 실제/설정 타일 (실제 >= 설정이면 초록, 부족하면 주황, 0이면 빨강)
-function tileFrac(lbl, cnt, need){
-  var klass = need>0 ? (cnt>=need?'ok':(cnt>0?'warn':'bad')) : (cnt>0?'ok':'warn');
+// 실제/설정 타일 (상태 기반: ok=초록, mismatch(부족/초과)=노랑, absent=빨강)
+function tileFracState(lbl, cnt, need, state){
+  var klass = state==='ok'?'ok':(state==='mismatch'?'warn':(state==='absent'?'bad':'mut'));
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
          '<div class="t-val">'+cnt+' <small>/ '+(need>0?need:'-')+'</small></div></div>';
 }
@@ -889,7 +895,14 @@ function renderBulkTable(){
   for(var f=0;f<currentServers.length;f++){ foot += '<td class="svrcell" data-srvtot="'+esc(currentServers[f].serverId)+'">-</td>'; }
   foot += '<td class="svrcell tot" data-granttot>-</td></tr></tfoot>';
   h+='</tbody>'+foot+'</table></div>';
-  h+='<div class="updated" style="margin-top:10px">범례: <span class="mini ok">송·N</span> 송신 세션 N개 · <span class="mini ok">수·N</span> 수신 LISTEN + 세션 N개 · <span class="mini no">수·N</span> LISTEN 안 함 · <span class="mini err">⚠</span> 서버 점검 실패</div>';
+  h+='<div class="updated" style="margin-top:10px;flex-direction:column;align-items:flex-start;gap:6px">'+
+     '<div><b>종합 상태(원천사 앞 점)</b> : '+
+       '<span class="rowdot ok"></span> <span style="color:var(--green-text)">정상</span> — 실제 세션수가 설정과 <b>정확히 일치</b> · '+
+       '<span class="rowdot warn"></span> <span style="color:var(--amber)">주의</span> — <b>부족하거나 초과</b>(설정≠실제), 일부만 정상, 또는 서버 점검 실패 · '+
+       '<span class="rowdot bad"></span> <span style="color:var(--red-text)">장애</span> — 세션 <b>전혀 없음</b> · '+
+       '<span class="rowdot"></span> <span style="color:var(--text-4)">점검없음</span> — 점검 대상 아님</div>'+
+     '<div><b>셀/합계</b> : <span class="mini ok">송·N</span> 정상 · <span class="mini warn">송·2/3</span> 부족·초과(설정과 다름) · <span class="mini no">수·N</span> 없음/닫힘 · <span class="mini mut">송·-</span> 제외 · <span class="mini err">⚠</span> 서버 점검 실패</div>'+
+     '</div>';
   wrap.innerHTML=h;
   var cbAll=$('cbAll');
   cbAll.onclick=function(){ var cbs=wrap.querySelectorAll('.cbRow'); for(var q=0;q<cbs.length;q++) cbs[q].checked=cbAll.checked; };
@@ -1050,26 +1063,27 @@ function fillBulk(d){
     var sT = (r.sendTotal!=null)?r.sendTotal:rowS;
     var rT = (r.recvTotal!=null)?r.recvTotal:rowR;
     var anyListen=false; for(var li=0;li<per.length;li++){ if(per[li].ok && per[li].recvListening) anyListen=true; }
-    // 원천사별 합계 (실제/설정)
+    // 축 상태(정확히 일치=ok, 부족/초과=mismatch(노랑), 없음=absent). 백엔드 state 우선.
+    var sSt = r.sendState || (!sHasSend?'na':(sNd>0?(sT===sNd?'ok':(sT===0?'absent':'mismatch')):(sT>0?'ok':'absent')));
+    var rSt = r.recvState || (!rHasRecv?'na':(!anyListen?'absent':(rNd>0?(rT===rNd?'ok':'mismatch'):'ok')));
+    var stCls=function(s){ return s==='ok'?'ok':(s==='mismatch'?'warn':(s==='absent'?'no':'mut')); };
+    // 원천사별 합계 (실제/설정). 초과/부족이면 노랑.
     var totCell=tr.querySelector('[data-tot]');
     if(totCell){
       var sTot = !sHasSend ? '<span class="mini mut">송·-</span>'
-                 :'<span class="mini '+(sNd>0?(sT>=sNd?'ok':'no'):'tt')+'" title="실제/설정">송·'+sT+'/'+sNd+'</span>';
+                 :'<span class="mini '+stCls(sSt)+'" title="실제/설정 — 초과도 주의">송·'+sT+'/'+sNd+'</span>';
       var rTot = !rHasRecv ? '<span class="mini mut">수·-</span>'
-                 :'<span class="mini '+(rNd>0?(rT>=rNd?'ok':'no'):(anyListen?'ok':'no'))+'" title="실제'+(rNd>0?'/설정':'')+'">수·'+rT+(rNd>0?('/'+rNd):'')+'</span>';
+                 :'<span class="mini '+stCls(rSt)+'" title="실제'+(rNd>0?'/설정':'')+'">수·'+rT+(rNd>0?('/'+rNd):'')+'</span>';
       totCell.innerHTML=sTot+rTot;
     }
     grandS+=rowS; grandR+=rowR;
-    // 종합상태: 백엔드 status 우선, 없으면(구버전) 설정값+합산으로 프론트 계산
+    // 종합상태: 백엔드 status 우선, 없으면 축 상태로 계산
     var overall = r.status;
     if(!overall){
-      if(!sHasSend && !rHasRecv) overall='mut';
-      else {
-        var sMet = !sHasSend || (sNd>0 ? sT>=sNd : sT>0);
-        var rMet = !rHasRecv || (anyListen && (rNd<=0 || rT>=rNd));
-        var sAny = sT>0, rAny = anyListen;
-        overall = (sMet && rMet) ? 'ok' : (((!sHasSend||!sAny) && (!rHasRecv||!rAny)) ? 'bad' : 'warn');
-      }
+      if(sSt==='na' && rSt==='na') overall='mut';
+      else if((sSt==='ok'||sSt==='na') && (rSt==='ok'||rSt==='na')) overall='ok';
+      else if((sSt==='absent'||sSt==='na') && (rSt==='absent'||rSt==='na')) overall='bad';
+      else overall='warn';
     }
     tr.querySelector('[data-dot]').className='rowdot '+overall;
     curOverall[r.id]=overall;
@@ -1248,7 +1262,7 @@ function renderSettings(){
        '<p class="desc">'+(b.sourceType==='file'?('파일 <b>'+esc(b.sourceRef)+'</b> 에 저장됩니다.'):'config 파일에 저장됩니다.')+' 이중화면 [+ 엔드포인트]로 세션을 여러 개. <b>방식</b>: 세션(연결유지, ESTABLISHED 확인) / probe(능동접속) / 제외(비연결유지 — 수신만 확인).</p>'+
        '<div id="srcList">'+srcsHtml+'</div>'+
        '<button class="addbtn add-src" style="margin-top:6px">+ 원천사</button>'+
-       '<div class="setbar"><button class="btn-primary" id="saveSrc">원천사 저장</button><span class="savemsg" id="msgSrc"></span></div></div>';
+       '<div class="setbar setbar-sticky"><button class="btn-primary" id="saveSrc">💾 원천사 저장</button><span class="savemsg" id="msgSrc"></span><span style="flex:1"></span><span style="font-size:12px;color:var(--text-4)">어디서 수정하든 이 버튼으로 저장</span></div></div>';
   } else if(b){
     h+='<div class="setcard"><h3>원천사 목록 <span class="badge">'+esc(typeKo)+'</span></h3>'+
        '<div class="setnote warn">이 업무는 DB(oracle) 방식이라 여기서 편집할 수 없습니다. sourcesFile/sources 방식으로 전환하면 편집 가능합니다.</div></div>';
