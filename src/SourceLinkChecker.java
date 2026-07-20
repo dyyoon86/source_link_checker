@@ -76,7 +76,8 @@ public class SourceLinkChecker {
     // 서버 주기 점검(monitor)의 마지막 결과 스냅샷 — 모니터 전용 페이지가 '이중 점검 없이' 그대로 미러링.
     //   bizId -> bulkJson 문자열 / bizId -> 갱신시각
     private static final Map<String, String> monitorSnapshot = new java.util.concurrent.ConcurrentHashMap<String, String>();
-    private static final Map<String, String> monitorSnapAt = new java.util.concurrent.ConcurrentHashMap<String, String>();
+    private static final Map<String, String> monitorSnapAt = new java.util.concurrent.ConcurrentHashMap<String, String>();   // 표시용 시각
+    private static final Map<String, Long> monitorSnapMs = new java.util.concurrent.ConcurrentHashMap<String, Long>();       // 신선도(ms)
     // /api/checkall 스로틀: 같은 조회(biz+auto+ids)는 minCheckIntervalMs(기본 1000ms) 내 결과 재사용 + 동시요청 single-flight.
     //   → 여러 관리자가 동시에 '조회'를 눌러도 실제 SSH 점검은 초당 1건을 넘지 않는다.
     static class Cached { final String json; final long at; Cached(String j, long a){ json=j; at=a; } }
@@ -85,6 +86,20 @@ public class SourceLinkChecker {
     private static Object checkLockFor(String key){
         Object l = checkLocks.get(key); if (l != null) return l;
         Object n = new Object(); Object p = checkLocks.putIfAbsent(key, n); return p != null ? p : n;
+    }
+    /** 스로틀 점검: 같은 key 는 minCheckIntervalMs 내 결과 재사용 + 동시요청 single-flight → 실제 SSH ≤ 초당 1건. */
+    private static String throttledCheckJson(Map<String, Object> biz, List<Src> sources, boolean auto, String key){
+        long minMs = (long) num(asMap(config.get("web")).get("minCheckIntervalMs"), 1000);
+        Cached hit = checkCache.get(key);
+        if (hit != null && System.currentTimeMillis() - hit.at < minMs) return hit.json;
+        synchronized (checkLockFor(key)) {
+            hit = checkCache.get(key);
+            if (hit != null && System.currentTimeMillis() - hit.at < minMs) return hit.json;
+            BulkResult br = performBulk(biz, sources, auto);
+            String json = bulkJson(br);
+            checkCache.put(key, new Cached(json, System.currentTimeMillis()));
+            return json;
+        }
     }
 
     // =====================================================================
@@ -480,22 +495,9 @@ public class SourceLinkChecker {
                 }
                 if (sources.isEmpty()) { sendJson(ex, 400, "{\"error\":\"선택된 원천사가 없습니다.\"}"); return; }
 
-                // 스로틀: 같은 조회(biz+auto+ids)는 minCheckIntervalMs 내면 캐시 결과 재사용(SSH 안 함).
-                //   동시 요청은 lock 으로 직렬화 → 첫 요청만 SSH, 나머지는 그 결과 공유. 실제 점검 ≤ 초당 1건.
-                long minMs = (long) num(asMap(config.get("web")).get("minCheckIntervalMs"), 1000);
+                // 스로틀: 같은 조회는 minCheckIntervalMs 내 결과 재사용 + 동시요청 single-flight (SSH ≤ 초당 1건).
                 String key = bizId + "|" + auto + "|" + (idsParam == null ? "" : idsParam);
-                Cached hit = checkCache.get(key);
-                if (hit != null && System.currentTimeMillis() - hit.at < minMs) { sendJson(ex, 200, hit.json); return; }
-
-                String json;
-                synchronized (checkLockFor(key)) {
-                    hit = checkCache.get(key);
-                    if (hit != null && System.currentTimeMillis() - hit.at < minMs) { sendJson(ex, 200, hit.json); return; }
-                    BulkResult br = performBulk(biz, sources, auto);
-                    json = bulkJson(br);
-                    checkCache.put(key, new Cached(json, System.currentTimeMillis()));
-                }
-                sendJson(ex, 200, json);
+                sendJson(ex, 200, throttledCheckJson(biz, sources, auto, key));
             } catch (Exception e) {
                 sendJson(ex, 500, "{\"error\":" + jstr(rootMsg(e)) + "}");
             }
@@ -902,6 +904,7 @@ public class SourceLinkChecker {
                 BulkResult br = performBulk(biz, sources, true);
                 monitorSnapshot.put(bizId, bulkJson(br));   // 모니터 페이지가 미러링할 최신 결과
                 monitorSnapAt.put(bizId, now());
+                monitorSnapMs.put(bizId, System.currentTimeMillis());
             }
             catch (Exception e) { System.out.println("[monitor] " + bizId + " 점검 오류: " + rootMsg(e)); }
         }
@@ -2135,7 +2138,29 @@ public class SourceLinkChecker {
                 Map<String, Object> mon = asMap(config.get("monitor"));
                 boolean enabled = Boolean.TRUE.equals(mon.get("enabled"));
                 int interval = Math.max(5, (int) num(mon.get("intervalSec"), 60));
-                String bizId = str(bizById(param(ex.getRequestURI().getRawQuery(), "biz")).get("id"), "");
+                Map<String, Object> biz = bizById(param(ex.getRequestURI().getRawQuery(), "biz"));
+                String bizId = str(biz.get("id"), "");
+
+                // 신선도 기준: monitor 켜짐이면 그 주기, 꺼짐이면 web.monitorRefreshSec(기본 15초).
+                //   스냅샷이 낡았으면 '서버가' 스로틀 점검(뷰어 SSH 0, 동시요청 1스윕)해서 채운다.
+                long refreshMs = enabled ? interval * 1000L
+                        : (long) (num(asMap(config.get("web")).get("monitorRefreshSec"), 15) * 1000);
+                Long ms = monitorSnapMs.get(bizId);
+                boolean fresh = ms != null && (System.currentTimeMillis() - ms) < refreshMs;
+                if (!fresh) {
+                    try {
+                        List<Src> sources = monitorSources(bizId, biz);   // 캐시 or 출처에서 확보(SSH 아님)
+                        if (!sources.isEmpty()) {
+                            String json = throttledCheckJson(biz, sources, true, bizId + "|mon");
+                            monitorSnapshot.put(bizId, json);
+                            monitorSnapAt.put(bizId, now());
+                            monitorSnapMs.put(bizId, System.currentTimeMillis());
+                        }
+                    } catch (Exception e) {
+                        System.out.println("[monitor/latest] " + bizId + " 점검 실패(이전 스냅샷 유지): " + rootMsg(e));
+                    }
+                }
+
                 String snap = monitorSnapshot.get(bizId);
                 String at = monitorSnapAt.get(bizId);
                 StringBuilder sb = new StringBuilder("{\"enabled\":").append(enabled)

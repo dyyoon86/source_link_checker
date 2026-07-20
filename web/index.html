@@ -380,6 +380,7 @@
   /* 모니터 모드: 관리자 전체조회 표는 그대로, 이력/설정 탭·조회 컨트롤·체크박스·행클릭만 제거(읽기전용 미러) */
   body.mon .viewtoggle,
   body.mon #bulkFab,
+  body.mon #sshbar,
   body.mon .control .autolbl,
   body.mon .control #autoInt,
   body.mon .control #reloadB,
@@ -547,9 +548,9 @@ function makeTab(b, active){
     result.innerHTML = '';
     stopAuto(); statusSnapshot = {};   // 업무 바뀌면 자동점검/스냅샷 리셋
     renderDbTarget();
+    if(MON){ currentServers=[]; if($('bulkWrap')) $('bulkWrap').innerHTML=''; }   // 업무 전환: 서버/표 리셋 후 새 업무로 미러
     loadSshStatus();
     loadSources();
-    if(MON){ setTimeout(monitorPoll, 500); }   // 모니터: 업무 전환 즉시 스냅샷 미러링
     // 설정 화면을 보는 중이면 상단 업무 전환에 맞춰 설정도 다시 로드(다른 업무 파일이 안 바뀌던 버그)
     if(currentView==='settings'){ setBiz = b.id; loadSettings(); }
   };
@@ -581,7 +582,7 @@ function sshCall(action, connecting){
     .then(function(r){return r.json();}).then(function(d){ renderSsh(d.servers||[]); })
     .catch(function(){ renderSsh([]); });
 }
-function loadSshStatus(){ sshCall('status', false); }
+function loadSshStatus(){ if(MON) return; sshCall('status', false); }   // 모니터 모드: /api/ssh 호출·SSH 상태바 없음(서버 목록은 스냅샷에서)
 
 function renderSsh(list){
   currentServers = list;                       // 전체 조회 서버 컬럼용
@@ -1552,24 +1553,22 @@ function monitorPoll(){
   if(!currentBiz){ return; }
   fetch('/api/monitor/latest?biz='+encodeURIComponent(currentBiz))
     .then(function(r){return r.json();}).then(function(d){
-      if(!d || !d.enabled){ showMonOff(); return; }
+      d=d||{};
+      var res=d.results||[];
+      if(!res.length){ showMonOff(); return; }   // 표시할 데이터 없음(원천사 없음 등)
       // 표 골격이 아직이면(서버/원천사 로드 전) 스냅샷 servers 로 구성
-      var hasTable = !!$('bulkWrap').querySelector('table');
-      if(!hasTable){
-        if(!currentServers.length && (d.servers||[]).length) currentServers=d.servers;
+      if(!currentServers.length && (d.servers||[]).length) currentServers=d.servers;
+      if(!$('bulkWrap').querySelector('table')){
         if(currentSources.length && currentServers.length) renderBulkTable(); else { setMonMeta(d); return; }
       }
-      if((d.results||[]).length){ fillBulk(d); detectChanges(); }
-      setMonMeta(d);
+      fillBulk(d); detectChanges(); setMonMeta(d);
     }).catch(function(){});
 }
 function showMonOff(){
   var wrap=$('bulkWrap');
-  wrap.innerHTML='<div class="monoff">🛈 <b>서버 주기점검(monitor)이 꺼져 있습니다.</b> 이 화면은 서버가 주기적으로 점검한 결과만 보여줍니다(브라우저는 직접 조회하지 않음).'+
-    '<br>켜는 법: <a href="/">관리 화면</a> → 설정 → <b>주기 점검</b>에서 사용함 체크, 또는 config 의 <code>monitor.enabled=true</code>.'+
-    '<br>이렇게 하면 <b>몇 명이 이 화면을 봐도 실제 점검은 주기당 1회</b>만 돕니다.</div>';
+  wrap.innerHTML='<div class="monoff">🛈 표시할 원천사가 없습니다. 관리 화면에서 원천사 목록을 먼저 불러오세요(↻ 재갱신).</div>';
   $('bulkInfo').textContent='';
-  var ai=$('autoInfo'); if(ai) ai.innerHTML='<span style="color:var(--short-text)">● 서버 주기점검 꺼짐</span>';
+  var ai=$('autoInfo'); if(ai) ai.innerHTML='<span style="color:var(--text-3)">데이터 없음</span>';
 }
 function setMonMeta(d){
   var ai=$('autoInfo'); if(!ai) return;
