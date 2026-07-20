@@ -346,11 +346,27 @@
   /* 저장 버튼 하단 고정 (긴 목록에서 스크롤 없이 저장) */
   .setbar-sticky{position:sticky;bottom:8px;z-index:6;margin-top:10px;padding:10px 12px;border-radius:var(--r-md);
     background:var(--surface);border:1px solid var(--line);box-shadow:0 4px 16px rgba(0,0,0,.10);}
+  /* 플로팅 조회 버튼 (전체조회에서 스크롤 내려도 항상 접근) */
+  .fab{position:fixed;right:24px;bottom:24px;z-index:90;display:flex;align-items:center;gap:10px;}
+  .fab-btn{height:52px;padding:0 26px;border-radius:99px;background:var(--orange-strong);color:#fff;
+    font-weight:700;font-size:15px;letter-spacing:-0.02em;border:none;cursor:pointer;font-family:inherit;
+    box-shadow:0 8px 24px rgba(248,81,0,.38);transition:background .12s,transform .12s;}
+  .fab-btn:hover{background:var(--orange);}
+  .fab-btn:active{transform:translateY(1px);}
+  .fab-btn:disabled{background:var(--disabled);box-shadow:none;cursor:not-allowed;}
+  .fab-mini{width:48px;height:48px;border-radius:99px;background:var(--surface);border:1px solid var(--line);
+    color:var(--text-2);font-size:20px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.15);font-family:inherit;}
+  .fab-mini:hover{background:var(--neutral-5);}
+  @media(max-width:520px){ .fab{right:12px;bottom:12px;} .fab-btn{height:48px;padding:0 18px;font-size:14px;} }
 </style>
 </head>
 <body>
 <div id="envbar" class="envbar"></div>
 <div id="toast" class="toast"></div>
+<div id="bulkFab" class="fab" style="display:none">
+  <button class="fab-mini" id="fabReload" title="원천사 목록 재갱신">↻</button>
+  <button class="fab-btn" id="fabCheck">⟳ 선택 연결 조회</button>
+</div>
 <div class="wrap">
   <header>
     <h1><span class="mark"></span>원천사 연결 상태 점검</h1>
@@ -447,6 +463,7 @@ function setView(v){
   $('bulkView').style.display   = v==='bulk'?'':'none';
   $('historyView').style.display= v==='history'?'':'none';
   $('settingsView').style.display= v==='settings'?'':'none';
+  $('bulkFab').style.display    = v==='bulk'?'flex':'none';   // 플로팅 조회버튼은 전체조회에서만
   // 설정 화면에선 상단 조회용 바(출처/갱신/SSH) 숨김
   var hideTop = (v==='settings');
   dbtargetEl.style.display = hideTop?'none':'';
@@ -855,6 +872,8 @@ function sock(label, lines){
 // ---- 전체 조회 (테이블) ----
 $('reloadB').onclick = function(){ reloadBtn.onclick(); };   // 단건 재갱신과 동일(확인창+DB재조회)
 $('checkAll').onclick = runBulkCheck;
+$('fabCheck').onclick = runBulkCheck;                        // 플로팅 선택 연결 조회
+$('fabReload').onclick = function(){ reloadBtn.onclick(); }; // 플로팅 재갱신
 
 function buildBulkTable(){
   // 서버 목록이 아직 없으면 먼저 확보 (SSH status) 후 재구성
@@ -927,6 +946,7 @@ function runBulkCheck(){
   for(var i=0;i<rows.length;i++){ var cb=rows[i].querySelector('.cbRow'); if(cb&&cb.checked) ids.push(rows[i].getAttribute('data-id')); }
   if(!ids.length){ alert('조회할 원천사를 선택하세요.'); return; }
   var btn=$('checkAll'), old=btn.textContent; btn.disabled=true; btn.textContent='조회 중...';
+  var fab=$('fabCheck'), fabOld=fab?fab.textContent:''; if(fab){ fab.disabled=true; fab.textContent='조회 중...'; }
   for(var r=0;r<rows.length;r++){
     var cb2=rows[r].querySelector('.cbRow');
     if(cb2&&cb2.checked){
@@ -936,12 +956,12 @@ function runBulkCheck(){
   }
   fetch('/api/checkall?biz='+encodeURIComponent(currentBiz)+'&ids='+encodeURIComponent(ids.join(',')))
     .then(function(x){return x.json();}).then(function(d){
-      btn.disabled=false; btn.textContent=old;
+      btn.disabled=false; btn.textContent=old; if(fab){ fab.disabled=false; fab.textContent=fabOld; }
       if(d.error){ alert('조회 실패: '+d.error); return; }
       fillBulk(d);
       statusSnapshot=copyMap(curOverall);   // 수동 조회는 기준점만 갱신(알람 없음)
       if(currentView==='history') loadHistoryView();
-    }).catch(function(e){ btn.disabled=false; btn.textContent=old; alert(String(e)); });
+    }).catch(function(e){ btn.disabled=false; btn.textContent=old; if(fab){ fab.disabled=false; fab.textContent=fabOld; } alert(String(e)); });
 }
 
 function copyMap(m){ var o={}; for(var k in m) o[k]=m[k]; return o; }
