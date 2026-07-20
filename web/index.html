@@ -746,7 +746,6 @@ function cls(cnt,total){ return cnt===total?'ok':(cnt===0?'bad':'warn'); }
 function sendApplicableOf(s){ var a=sendsOf(s); for(var i=0;i<a.length;i++){ var e=a[i]; if(e.sendip && e.sendport && e.checkMode!=='skip') return true; } return false; }
 function recvApplicableOf(s){ return recvsOf(s).length>0; }
 function modeTag(mode){
-  if(mode==='probe') return ' <span class="tag" style="background:#2465FF">probe</span>';
   if(mode==='skip')  return ' <span class="tag" style="background:var(--text-4)">skip</span>';
   return '';
 }
@@ -841,7 +840,7 @@ function card(r, s){
   return h;
 }
 
-// 송신 행 (엔드포인트별, 방식별 표시: session/probe/skip)
+// 송신 행 (엔드포인트별, 방식: session/skip)
 function sendRow(er, multi, idx){
   var h='', mode=er.mode||'session';
   if(multi){
@@ -852,9 +851,6 @@ function sendRow(er, multi, idx){
   if(mode==='skip'){
     statusHtml=statusEl('mut','제외 (연결유지 아님)');
     badge='<span class="sess-badge zero">송신 점검 안 함</span>';
-  } else if(mode==='probe'){
-    statusHtml = er.sendConnected ? statusEl('ok','열림 (OPEN)') : statusEl('bad','닫힘 (CLOSED)');
-    badge='<span class="'+(er.sendConnected?'sess-badge':'sess-badge zero')+'">'+(er.sendConnected?'접속 가능':'접속 불가')+'</span>';
   } else {
     // 개별 서버: 연결됨/미연결 + 세션 개수만 (부족/초과 판정은 합계에서)
     var sendN=(er.sendCount!=null)?er.sendCount:(er.sendLines?er.sendLines.length:0);
@@ -864,7 +860,7 @@ function sendRow(er, multi, idx){
   h+='<div class="row">'+
      '<div class="row-top"><span class="row-name"><span class="tag send">송신</span>'+modeTag(mode)+'</span>'+statusHtml+'</div>'+
      '<div class="row-detail"><span class="addr-chip">↗ '+esc(er.sendip)+':'+esc(er.sendport)+'</span>'+badge+'</div>'+
-     sock('소켓/probe '+(er.sendLines?er.sendLines.length:0)+'건', er.sendLines)+
+     sock('소켓 '+(er.sendLines?er.sendLines.length:0)+'건', er.sendLines)+
      '</div>';
   return h;
 }
@@ -1208,7 +1204,7 @@ function sendRowHtml(e){ e=e||{};
     '<input class="inp mono e-sendip" style="width:130px" placeholder="송신 IP" value="'+esc(e.sendip||'')+'">'+
     '<input class="inp mono e-sendport" style="width:80px" placeholder="송신Port" value="'+esc(e.sendport||'')+'">'+
     '<select class="inp e-mode" style="width:130px" title="송신 점검 방식">'+
-      opt('session','세션(연결유지)')+opt('probe','probe(능동접속)')+opt('skip','제외(비연결)')+
+      opt('session','세션(연결유지)')+opt('skip','제외(비연결)')+
     '</select>'+
     '<input class="inp mono e-expsend" style="width:74px" placeholder="예상수" title="예상 송신 세션수(0=미지정)" value="'+esc(e.expectSend||'')+'">'+
     '<button class="xbtn del-send" title="송신 삭제">×</button></div>';
@@ -1326,7 +1322,7 @@ function renderSettings(){
         '</div>';
     }
     h+='<div class="setcard"><h3>원천사 목록 <span class="badge">'+esc(typeKo)+'</span></h3>'+
-       '<p class="desc">'+(b.sourceType==='file'?('파일 <b>'+esc(b.sourcesFile||b.sourceRef)+'</b> 에서 불러오고, 저장하면 그 파일에 씁니다.'):'config 파일에 저장됩니다.')+' 이중화면 [+ 엔드포인트]로 세션을 여러 개. <b>방식</b>: 세션(연결유지, ESTABLISHED 확인) / probe(능동접속) / 제외(비연결유지 — 수신만 확인).</p>'+
+       '<p class="desc">'+(b.sourceType==='file'?('파일 <b>'+esc(b.sourcesFile||b.sourceRef)+'</b> 에서 불러오고, 저장하면 그 파일에 씁니다.'):'config 파일에 저장됩니다.')+' 이중화면 [+ 엔드포인트]로 세션을 여러 개. <b>방식</b>: 세션(연결유지, ESTABLISHED 확인) / 제외(비연결유지 — 수신만 확인).</p>'+
        fileBar+
        '<div id="srcList">'+srcsHtml+'</div>'+
        '<button class="addbtn add-src" style="margin-top:6px">+ 원천사</button>'+

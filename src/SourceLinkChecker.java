@@ -77,25 +77,28 @@ public class SourceLinkChecker {
     static class Ep {
         String label = "";
         String sendip = "", sendport = "", recvport = "";
-        // 송신 점검 방식: session(ESTABLISHED 세션 확인, 연결유지형) / probe(능동 TCP 접속시도, 비연결유지) / skip(송신 제외)
+        // 송신 점검 방식: session(ESTABLISHED 세션 확인, 연결유지형) / skip(송신 제외). (probe 제거됨)
         String checkMode = "session";
         // 예상 세션 개수(정상 기준). 0 = 미지정(송신은 ≥1, 수신은 LISTEN만). >0 이면 실제 세션수가 그 이상이어야 정상.
         int expectSend = 0, expectRecv = 0;
         boolean hasSend() { return !sendip.isEmpty() && !sendport.isEmpty(); }
         boolean hasRecv() { return !recvport.isEmpty(); }
-        boolean isProbe() { return "probe".equals(checkMode); }
+        boolean isProbe() { return false; }   // probe 기능 제거 — 원천사에 능동 접속하지 않음
         boolean isSkip()  { return "skip".equals(checkMode); }
         // 송신을 실제로 판정하는가? (skip 이면 판정 안 함)
         boolean sendChecked() { return hasSend() && !isSkip(); }
     }
 
-    /** DB sync/async 값(S/A 등) 또는 명시적 방식명 -> checkMode. A=async=session(연결유지), S=sync=skip(제외). */
+    /**
+     * DB sync/async 값(S/A 등) 또는 명시적 방식명 -> checkMode. A=async=session(연결유지), S=sync=skip(제외).
+     * probe(능동 접속)는 위험하여 제거 — 어떤 값이 와도 능동 접속은 하지 않고 session/skip 으로만 처리.
+     */
     private static String toCheckMode(String v) {
         if (v == null) return "session";
         String t = v.trim().toUpperCase();
-        if (t.equals("SESSION") || t.equals("PROBE") || t.equals("SKIP")) return t.toLowerCase();
-        if (t.equals("A") || t.equals("ASYNC")) return "session";
+        if (t.equals("SKIP")) return "skip";
         if (t.equals("S") || t.equals("SYNC")) return "skip";
+        // PROBE / ASYNC / A / SESSION / 기타 → 모두 session (원천사에 접속하지 않는 안전한 ss 조회)
         return "session";
     }
 
@@ -1740,22 +1743,11 @@ public class SourceLinkChecker {
         return out;
     }
 
-    // ss/netstat 명령 + probe(능동 TCP 접속) 명령. relRx 로 서버에서 필터, probe 는 PROBE ip:port OPEN|CLOSED 출력.
+    // ss/netstat 로 소켓 상태만 '읽기' 하는 명령. relRx 로 서버에서 필터해 전송량 최소화.
+    // (probe/능동 TCP 접속 기능은 제거됨 — 원천사 포트로 아무 접속도 하지 않음. 인자 probes 는 무시.)
     private static String buildCmd(String relRx, List<String> probes) {
         String relGrep = (relRx == null || relRx.isEmpty()) ? "" : " | grep -E '" + relRx + "'";
-        StringBuilder cmd = new StringBuilder("( ss -tan 2>/dev/null || netstat -an 2>/dev/null ) | grep -iE 'estab|listen'").append(relGrep);
-        if (probes != null) {
-            for (String p : probes) {
-                int i = p.lastIndexOf(':');
-                if (i < 0) continue;
-                String ip = p.substring(0, i), port = p.substring(i + 1);
-                // nc 우선(-z -w2), 없으면 bash /dev/tcp (timeout 2). 결과: PROBE ip:port OPEN|CLOSED
-                cmd.append("; if ( command -v nc >/dev/null 2>&1 && nc -z -w2 ").append(ip).append(" ").append(port)
-                   .append(" >/dev/null 2>&1 ) || ( timeout 2 bash -c 'exec 3<>/dev/tcp/").append(ip).append("/").append(port)
-                   .append("' >/dev/null 2>&1 ); then echo 'PROBE ").append(p).append(" OPEN'; else echo 'PROBE ").append(p).append(" CLOSED'; fi");
-            }
-        }
-        return cmd.toString();
+        return "( ss -tan 2>/dev/null || netstat -an 2>/dev/null ) | grep -iE 'estab|listen'" + relGrep;
     }
 
     // 출력 라인들을 한 엔드포인트 기준으로 분류해 er 에 채움. 방식(session/probe/skip)에 따라 송신 판정이 다름.
