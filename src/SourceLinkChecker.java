@@ -73,6 +73,10 @@ public class SourceLinkChecker {
     //   메모리(ConcurrentHashMap) + 파일(.ports.json) 병행 — 서버 재시작 후에도 직전 상태를 이어 flap 오탐/누락 최소화.
     private static final Map<String, String> portSnap = new java.util.concurrent.ConcurrentHashMap<String, String>();
     private static File portsFile;
+    // 서버 주기 점검(monitor)의 마지막 결과 스냅샷 — 모니터 전용 페이지가 '이중 점검 없이' 그대로 미러링.
+    //   bizId -> bulkJson 문자열 / bizId -> 갱신시각
+    private static final Map<String, String> monitorSnapshot = new java.util.concurrent.ConcurrentHashMap<String, String>();
+    private static final Map<String, String> monitorSnapAt = new java.util.concurrent.ConcurrentHashMap<String, String>();
 
     // =====================================================================
     // 데이터 모델
@@ -170,6 +174,7 @@ public class SourceLinkChecker {
             server.createContext("/api/checkall", new CheckAllHandler());
             server.createContext("/api/config", new ConfigHandler());
             server.createContext("/api/export/sources", new ExportHandler());
+            server.createContext("/api/monitor/latest", new MonitorLatestHandler());
             server.setExecutor(Executors.newFixedThreadPool(12));
             server.start();
 
@@ -870,7 +875,11 @@ public class SourceLinkChecker {
             if (!want.isEmpty() && !want.contains(bizId)) continue;
             List<Src> sources = monitorSources(bizId, biz);
             if (sources.isEmpty()) continue;
-            try { performBulk(biz, sources, true); }
+            try {
+                BulkResult br = performBulk(biz, sources, true);
+                monitorSnapshot.put(bizId, bulkJson(br));   // 모니터 페이지가 미러링할 최신 결과
+                monitorSnapAt.put(bizId, now());
+            }
             catch (Exception e) { System.out.println("[monitor] " + bizId + " 점검 오류: " + rootMsg(e)); }
         }
     }
@@ -2092,6 +2101,32 @@ public class SourceLinkChecker {
     //   OpenXML(.xlsx) 을 순수 Java(java.util.zip) 로 직접 생성 — 외부 라이브러리 없음.
     //   모든 셀을 inlineStr(텍스트) 로 써서 "001" 같은 앞자리 0/포트가 보존된다.
     // ---------------------------------------------------------------------
+    /**
+     * GET /api/monitor/latest?biz=<id> -> 서버 주기점검(monitor)의 마지막 결과 스냅샷.
+     *   { enabled, updatedAt, intervalSec, servers:[...], results:[...] }  (results/servers 는 /api/checkall 과 동일 형태)
+     *   monitor 가 아직 한 번도 안 돌았으면 results/servers 빈 배열. 모니터 전용 페이지가 '이중 점검 없이' 미러링용.
+     */
+    static class MonitorLatestHandler implements HttpHandler {
+        public void handle(HttpExchange ex) throws IOException {
+            try {
+                Map<String, Object> mon = asMap(config.get("monitor"));
+                boolean enabled = Boolean.TRUE.equals(mon.get("enabled"));
+                int interval = Math.max(5, (int) num(mon.get("intervalSec"), 60));
+                String bizId = str(bizById(param(ex.getRequestURI().getRawQuery(), "biz")).get("id"), "");
+                String snap = monitorSnapshot.get(bizId);
+                String at = monitorSnapAt.get(bizId);
+                StringBuilder sb = new StringBuilder("{\"enabled\":").append(enabled)
+                        .append(",\"intervalSec\":").append(interval)
+                        .append(",\"updatedAt\":").append(at == null ? "null" : jstr(at)).append(',');
+                if (snap != null && snap.startsWith("{")) sb.append(snap.substring(1));  // {"servers":..,"results":..}
+                else sb.append("\"servers\":[],\"results\":[]}");
+                sendJson(ex, 200, sb.toString());
+            } catch (Exception e) {
+                sendJson(ex, 500, "{\"error\":" + jstr(rootMsg(e)) + "}");
+            }
+        }
+    }
+
     static class ExportHandler implements HttpHandler {
         public void handle(HttpExchange ex) throws IOException {
             try {

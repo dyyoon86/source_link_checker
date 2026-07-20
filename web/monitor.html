@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>원천사 연결 모니터</title>
+<style>
+  :root{
+    --bg:#F6F6F9; --surface:#FFFFFF; --line:#E5E5E8; --line-soft:#F0F0F3;
+    --text-1:#151515; --text-2:#454545; --text-3:#888888; --text-4:#B0B0B3;
+    --green:#28C85D; --green-text:#187D3A; --green-5:#F0FDF4; --green-20:#BDF5CE;
+    --red:#FF4242; --red-text:#D10505; --red-5:#FFEEED; --red-20:#FFCDC9;
+    --warn:#F5B301; --warn-5:#FFF8E1; --warn-20:#FCE4A6; --warn-text:#9A6A00;   /* 초과=노랑 */
+    --short:#FB8C00; --short-5:#FFF3E0; --short-20:#FFD8A8; --short-text:#A85800; /* 부족=주황 */
+    --na:#9AA0A6; --na-5:#F1F3F4; --na-20:#DADCE0;
+    --orange:#FF6114;
+    --r-sm:4px; --r-md:8px; --r-lg:12px;
+    --mono:"JetBrains Mono","D2Coding",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",system-ui,sans-serif;
+    background:var(--bg);color:var(--text-1);letter-spacing:-0.02em;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1400px;margin:0 auto;padding:22px 20px 60px;}
+
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px;}
+  h1{font-size:22px;font-weight:800;margin:0;}
+  .envbadge{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--na-5);color:var(--text-2);border:1px solid var(--line);}
+  .envbadge.red{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .envbadge.blue{background:#EAF2FF;color:#1A56DB;border-color:#C6DBFF;}
+  .spacer{flex:1;}
+  .meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--text-3);}
+  .meta b{color:var(--text-1);}
+  .pill{padding:3px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface);}
+  .pill.mirror{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
+  .pill.poll{background:var(--warn-5);color:var(--warn-text);border-color:var(--warn-20);}
+  .dotpulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:5px;vertical-align:1px;animation:pulse 1.4s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  .sum{display:flex;gap:8px;flex-wrap:wrap;}
+  .sc{font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:99px;border:1px solid var(--line);}
+  .sc.ok{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
+  .sc.warn{background:var(--warn-5);color:var(--warn-text);border-color:var(--warn-20);}
+  .sc.bad{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .sc.na{background:var(--na-5);color:var(--text-2);border-color:var(--na-20);}
+
+  section.biz{margin-top:22px;}
+  section.biz>h2{font-size:15px;font-weight:800;margin:0 0 10px;display:flex;align-items:center;gap:10px;}
+  .bizsum{font-size:12px;font-weight:600;color:var(--text-3);}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}
+
+  .tile{position:relative;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--na);
+    border-radius:var(--r-md);padding:11px 13px;box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .tile.st-ok{border-left-color:var(--green);}
+  .tile.st-excess{border-left-color:var(--warn);}
+  .tile.st-short{border-left-color:var(--short);}
+  .tile.st-bad{border-left-color:var(--red);}
+  .tile.st-na{border-left-color:var(--na);}
+  .tname{font-size:14px;font-weight:700;display:flex;align-items:baseline;gap:6px;}
+  .tid{font-family:var(--mono);font-size:11px;color:var(--text-4);background:var(--na-5);border:1px solid var(--line);border-radius:var(--r-sm);padding:0 5px;}
+  .trow{margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .tstat{font-size:12px;font-weight:800;padding:2px 9px;border-radius:99px;}
+  .tstat.st-ok{background:var(--green-5);color:var(--green-text);}
+  .tstat.st-excess{background:var(--warn-5);color:var(--warn-text);}
+  .tstat.st-short{background:var(--short-5);color:var(--short-text);}
+  .tstat.st-bad{background:var(--red-5);color:var(--red-text);}
+  .tstat.st-na{background:var(--na-5);color:var(--text-2);}
+  .tcnt{font-size:12px;color:var(--text-2);font-family:var(--mono);}
+  .tsrv{margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;}
+  .sd{font-size:10.5px;font-family:var(--mono);padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--text-3);background:var(--na-5);}
+  .sd.ok{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
+  .sd.err{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
+  .tflap{margin-top:7px;font-size:11.5px;font-weight:700;color:var(--warn-text);background:var(--warn-5);border:1px solid var(--warn-20);border-radius:var(--r-sm);padding:3px 7px;}
+  .tflap .fp{display:block;font-weight:500;color:var(--text-2);font-family:var(--mono);font-size:10.5px;margin-top:2px;}
+
+  .legend{margin-top:26px;display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--text-3);border-top:1px solid var(--line);padding-top:12px;}
+  .legend .k{display:inline-flex;align-items:center;gap:5px;}
+  .legend .sw{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .offbanner{background:var(--warn-5);border:1px solid var(--warn-20);color:var(--warn-text);border-radius:var(--r-md);
+    padding:14px 16px;font-size:13px;line-height:1.7;margin-bottom:6px;}
+  .offbanner code{font-family:var(--mono);background:#fff;border:1px solid var(--warn-20);border-radius:3px;padding:1px 5px;}
+  .msg{padding:40px;text-align:center;color:var(--text-3);font-size:14px;}
+  .msg .spin{display:inline-block;width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--orange);border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:-2px;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  a.home{font-size:12px;color:var(--text-3);text-decoration:none;border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px;}
+  a.home:hover{color:var(--orange);border-color:var(--orange);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🔌 원천사 연결 모니터</h1>
+    <span class="envbadge" id="envbadge" style="display:none"></span>
+    <span class="spacer"></span>
+    <div class="meta">
+      <span class="pill" id="mode">준비 중…</span>
+      <span id="updated"></span>
+      <span id="next"></span>
+      <a class="home" href="/">← 관리 화면</a>
+    </div>
+  </header>
+  <div class="sum" id="grandsum"></div>
+  <div id="board"><div class="msg"><span class="spin"></span>불러오는 중…</div></div>
+  <div class="legend">
+    <span class="k"><span class="sw" style="background:var(--green)"></span>정상 (설정=실제)</span>
+    <span class="k"><span class="sw" style="background:var(--warn)"></span>초과 (설정보다 많음)</span>
+    <span class="k"><span class="sw" style="background:var(--short)"></span>부족 (설정보다 적음)</span>
+    <span class="k"><span class="sw" style="background:var(--red)"></span>장애 (연결 없음)</span>
+    <span class="k"><span class="sw" style="background:var(--na)"></span>확인불가 (점검 실패)</span>
+    <span class="k">⚠ 재접속 = 직전 대비 세션이 끊겼다 다시 붙음</span>
+  </div>
+</div>
+
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var REFRESH_SEC = 15;
+var businesses = [];      // [{id,name}]
+var envInfo = {};
+var countdown = REFRESH_SEC;
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function nowTime(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+
+// checker status(ok/excess/short/bad/mut) -> 표시 클래스/라벨
+function stClass(s){ return s==='ok'?'st-ok':(s==='excess'?'st-excess':(s==='short'?'st-short':(s==='bad'?'st-bad':'st-na'))); }
+function stKo(s){ return s==='ok'?'정상':(s==='excess'?'초과':(s==='short'?'부족':(s==='bad'?'장애':'확인불가'))); }
+function bucket(s){ return s==='ok'?'ok':(s==='bad'?'bad':(s==='mut'||!s?'na':'warn')); }
+
+// 완전 읽기 전용: /api/env(배너) + /api/businesses(업무명) + /api/monitor/latest(캐시된 점검결과)만.
+//   SSH·DB 를 유발하는 호출(/api/checkall, /api/sources?refresh) 은 하지 않는다 → 뷰어 수와 무관하게 부하 0.
+function boot(){
+  Promise.resolve()
+    .then(function(){ return fetch('/api/env').then(function(r){return r.json();}).then(function(d){ envInfo=d||{}; renderEnv(); }).catch(function(){}); })
+    .then(function(){ return fetch('/api/businesses').then(function(r){return r.json();}).then(function(d){ businesses=(d&&d.businesses)||[]; }).catch(function(){ businesses=[]; }); })
+    .then(function(){ tick(); setInterval(clock, 1000); });
+}
+
+function renderEnv(){
+  var el=$('envbadge'); var name=envInfo.name||'', tag=envInfo.tag||'', color=envInfo.color||'';
+  if(!name && !tag){ el.style.display='none'; return; }
+  el.style.display=''; el.className='envbadge'+(color==='red'?' red':(color==='blue'?' blue':''));
+  el.textContent=(name?name:'')+(tag?' '+tag:'');
+}
+
+function clock(){
+  countdown--;
+  if(countdown<=0){ tick(); return; }
+  $('next').textContent='다음 갱신 '+countdown+'초';
+}
+
+// 한 사이클: 업무별로 monitor 스냅샷(있으면) 미러링, 없으면 직접 조회(auto=1)
+function tick(){
+  countdown=REFRESH_SEC;
+  Promise.all(businesses.map(fetchBiz)).then(render);
+}
+
+// ★ 미러 전용: 브라우저는 서버가 주기 점검한 결과(캐시)만 읽는다. 절대 직접 조회(SSH 유발)하지 않는다.
+//   → 몇 명이 보든 실제 점검 부하는 '서버 주기당 1회'로 고정. 동시 조회 폭주 방지가 목적.
+function fetchBiz(b){
+  return fetch('/api/monitor/latest?biz='+encodeURIComponent(b.id)).then(function(r){return r.json();})
+    .then(function(m){
+      m=m||{};
+      if(!m.enabled) return { biz:b, mode:'off', intervalSec:m.intervalSec, servers:[], results:[], updatedAt:null };
+      return { biz:b, mode:(m.results&&m.results.length?'mirror':'waiting'),
+               intervalSec:m.intervalSec, updatedAt:m.updatedAt, servers:m.servers||[], results:m.results||[] };
+    })
+    .catch(function(e){ return { biz:b, mode:'off', error:String(e), servers:[], results:[] }; });
+}
+
+function render(list){
+  var anyMirror=false, anyOff=false, anyWaiting=false;
+  var g={ok:0,warn:0,bad:0,na:0};
+  var lastAt='', interval=0;
+  var html='';
+  for(var i=0;i<list.length;i++){
+    var it=list[i];
+    if(it.mode==='mirror') anyMirror=true;
+    else if(it.mode==='waiting') anyWaiting=true;
+    else anyOff=true;
+    if(it.updatedAt && it.updatedAt>lastAt) lastAt=it.updatedAt;
+    if(it.intervalSec) interval=it.intervalSec;
+    var res=it.results||[];
+    var b={ok:0,warn:0,bad:0,na:0};
+    var tiles='';
+    if(it.mode==='off'){
+      tiles='<div class="msg" style="grid-column:1/-1">서버 주기점검(monitor)이 꺼져 있어 표시할 데이터가 없습니다.</div>';
+    } else if(it.mode==='waiting' || !res.length){
+      tiles='<div class="msg" style="grid-column:1/-1"><span class="spin"></span>서버 첫 점검 대기 중…</div>';
+    } else {
+      for(var j=0;j<res.length;j++){ tiles+=tileHtml(res[j], it.servers); var bk=bucket(res[j].status); b[bk]++; g[bk]++; }
+    }
+    html+='<section class="biz"><h2>'+esc(it.biz.name||it.biz.id)+
+      ' <span class="bizsum">정상 '+b.ok+' · 주의 '+b.warn+' · 장애 '+b.bad+(b.na?' · 확인불가 '+b.na:'')+'</span></h2>'+
+      '<div class="tiles">'+tiles+'</div></section>';
+  }
+
+  // monitor 꺼짐 안내 배너 (모두 꺼짐일 때)
+  if(anyOff && !anyMirror && !anyWaiting){
+    html='<div class="offbanner">🛈 <b>서버 주기점검(monitor)이 꺼져 있습니다.</b> 이 화면은 서버가 주기적으로 점검한 결과만 보여줍니다(브라우저는 직접 조회하지 않음). '+
+         '<br>켜는 법: 관리 화면 → 설정 → <b>주기 점검</b>에서 사용함 체크, 또는 config 의 <code>monitor.enabled=true</code>. '+
+         '이렇게 하면 <b>몇 명이 이 화면을 봐도 실제 점검은 주기당 1회</b>만 돕니다.</div>'+html;
+  }
+  $('board').innerHTML=html;
+
+  // 모드/시각 표시
+  var mode=$('mode');
+  if(anyMirror){ mode.className='pill mirror'; mode.innerHTML='<span class="dotpulse"></span>서버 자동점검 미러링 (조회 부하 X)'; }
+  else if(anyWaiting){ mode.className='pill'; mode.innerHTML='<span class="dotpulse"></span>서버 점검 대기 중'; }
+  else { mode.className='pill poll'; mode.textContent='서버 주기점검 꺼짐'; }
+  $('updated').innerHTML = lastAt ? ('서버 마지막 점검 <b>'+esc(lastAt)+'</b>'+(interval?' · 주기 '+interval+'초':'')) : '';
+
+  $('grandsum').innerHTML = (anyMirror ?
+    '<span class="sc ok">정상 '+g.ok+'</span>'+
+    '<span class="sc warn">주의 '+g.warn+'</span>'+
+    '<span class="sc bad">장애 '+g.bad+'</span>'+
+    (g.na?'<span class="sc na">확인불가 '+g.na+'</span>':'') : '');
+}
+
+function tileHtml(r, servers){
+  var cls=stClass(r.status);
+  var nm=(r.name)||r.id;
+  // 송/수 실제·기대
+  var sN=(r.sendNeed!=null)?r.sendNeed:0, sT=(r.sendTotal!=null)?r.sendTotal:0;
+  var rN=(r.recvNeed!=null)?r.recvNeed:0, rT=(r.recvTotal!=null)?r.recvTotal:0;
+  var cnt='';
+  if(sN>0 || r.sendApp!==false) cnt+='송 '+sT+(sN>0?'/'+sN:'');
+  if(rN>0 || r.recvApp!==false){ if(cnt)cnt+=' · '; cnt+='수 '+rT+(rN>0?'/'+rN:''); }
+  // 서버별
+  var per=r.servers||[]; var sd='';
+  for(var k=0;k<per.length;k++){ var ps=per[k];
+    var okc = ps.ok===false ? 'err' : (((ps.sendCount||0)>0 || ps.sendConnected || ps.recvListening || (ps.recvEstabCount||0)>0) ? 'ok' : '');
+    var mark = ps.ok===false ? '✕' : '';
+    sd+='<span class="sd '+okc+'">'+esc(ps.serverId||'')+(mark?' '+mark:'')+'</span>';
+  }
+  // 재접속
+  var flaps=r.flaps||[]; var flap='';
+  if(flaps.length){
+    var fp=''; for(var f=0;f<flaps.length;f++) fp+='<span class="fp">'+esc(flaps[f])+'</span>';
+    flap='<div class="tflap">⚠ 재접속 감지'+fp+'</div>';
+  }
+  return '<div class="tile '+cls+'">'+
+    '<div class="tname">'+esc(nm)+' <span class="tid">'+esc(r.id)+'</span></div>'+
+    '<div class="trow"><span class="tstat '+cls+'">'+stKo(r.status)+'</span>'+(cnt?'<span class="tcnt">'+cnt+'</span>':'')+'</div>'+
+    (sd?'<div class="tsrv">'+sd+'</div>':'')+
+    flap+
+    '</div>';
+}
+
+boot();
+</script>
+</body>
+</html>
