@@ -1313,8 +1313,21 @@ function renderSettings(){
     var srcsHtml=''; var srcs=b.sources||[];
     for(var s=0;s<srcs.length;s++) srcsHtml+=srcBlockHtml(srcs[s]);
     if(!srcs.length) srcsHtml=srcBlockHtml(null);
+    // 파일 방식이면: 파일 경로 표시/편집 + 다시 불러오기
+    var fileBar='';
+    if(b.sourceType==='file'){
+      fileBar='<div class="setnote" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+        '<span style="font-weight:600">주입 파일</span>'+
+        '<input class="inp mono" id="srcFilePath" style="flex:1;min-width:220px" value="'+esc(b.sourcesFile||'')+'" placeholder="sources-firm.json (config 폴더 기준 상대/절대경로)">'+
+        '<button class="addbtn" id="saveFilePath">경로 저장</button>'+
+        '<button class="addbtn" id="reloadFile" style="border-color:var(--orange-strong);color:var(--orange-strong)">↻ 파일에서 다시 불러오기</button>'+
+        '<span class="savemsg" id="msgFile"></span>'+
+        '<div style="width:100%;font-size:11px;color:var(--text-4)">실제 경로: '+esc(b.sourcesFileAbs||b.sourceRef||'-')+' · 현재 이 파일의 내용을 아래에서 편집 중</div>'+
+        '</div>';
+    }
     h+='<div class="setcard"><h3>원천사 목록 <span class="badge">'+esc(typeKo)+'</span></h3>'+
-       '<p class="desc">'+(b.sourceType==='file'?('파일 <b>'+esc(b.sourceRef)+'</b> 에 저장됩니다.'):'config 파일에 저장됩니다.')+' 이중화면 [+ 엔드포인트]로 세션을 여러 개. <b>방식</b>: 세션(연결유지, ESTABLISHED 확인) / probe(능동접속) / 제외(비연결유지 — 수신만 확인).</p>'+
+       '<p class="desc">'+(b.sourceType==='file'?('파일 <b>'+esc(b.sourcesFile||b.sourceRef)+'</b> 에서 불러오고, 저장하면 그 파일에 씁니다.'):'config 파일에 저장됩니다.')+' 이중화면 [+ 엔드포인트]로 세션을 여러 개. <b>방식</b>: 세션(연결유지, ESTABLISHED 확인) / probe(능동접속) / 제외(비연결유지 — 수신만 확인).</p>'+
+       fileBar+
        '<div id="srcList">'+srcsHtml+'</div>'+
        '<button class="addbtn add-src" style="margin-top:6px">+ 원천사</button>'+
        '<div class="setbar setbar-sticky"><button class="btn-primary" id="saveSrc">💾 원천사 저장</button><span class="savemsg" id="msgSrc"></span><span style="flex:1"></span><span style="font-size:12px;color:var(--text-4)">어디서 수정하든 이 버튼으로 저장</span></div></div>';
@@ -1364,6 +1377,21 @@ function wireSettings(){
   if($('saveSrv')) $('saveSrv').onclick=saveServers;
   if($('saveOra')) $('saveOra').onclick=saveOracle;
   if($('exportDb')) $('exportDb').onclick=exportDbToFile;
+  if($('saveFilePath')) $('saveFilePath').onclick=saveFilePath;
+  if($('reloadFile')) $('reloadFile').onclick=reloadFile;
+}
+
+function saveFilePath(){
+  var file=$('srcFilePath').value.trim();
+  if(!file){ setMsg('msgFile','파일 경로를 입력하세요.',true); return; }
+  postConfig({section:'sourceFile', biz:setBiz, file:file}, 'msgFile', function(){
+    loadSettings();                              // 새 파일 내용으로 에디터 갱신
+    if(currentBiz===setBiz) loadSources(false);
+  });
+}
+function reloadFile(){
+  if(!window.confirm('현재 파일에서 원천사 목록을 다시 불러옵니다.\n저장하지 않은 편집 내용은 사라집니다.\n\n계속할까요?')) return;
+  loadSettings();   // /api/config 재조회 → 파일을 다시 읽어 에디터 초기화
 }
 
 function exportDbToFile(){

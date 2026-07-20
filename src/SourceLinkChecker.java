@@ -797,6 +797,7 @@ public class SourceLinkChecker {
               .append(",\"sourceMode\":").append(jstr(str(biz.get("sourceMode"), "")))
               .append(",\"sourceRef\":").append(jstr(sourceRef(biz)))
               .append(",\"sourcesFile\":").append(jstr(str(biz.get("sourcesFile"), "")))
+              .append(",\"sourcesFileAbs\":").append(jstr(sourcesFileAbs(biz)))
               .append(",\"hasFile\":").append(!str(biz.get("sourcesFile"), "").trim().isEmpty())
               .append(",\"hasConfig\":").append(biz.get("sources") != null)
               .append(",\"hasDb\":").append(!str(oracle.get("sourcesSql"), "").trim().isEmpty())
@@ -876,6 +877,24 @@ public class SourceLinkChecker {
                         synchronized (CACHE_LOCK) { sourcesCache.put(bizId, fresh); cacheUpdatedAt.put(bizId, now()); saveCache(); }
                     } catch (Exception re) { warn = " (원천사 로드 경고: " + rootMsg(re) + ")"; }
                     sendJson(ex, 200, "{\"ok\":true,\"msg\":" + jstr("원천사 방식을 '" + mode + "' 로 전환했습니다." + warn) + "}");
+                    return;
+                }
+
+                if (section.equals("sourceFile")) {
+                    // sourcesFile 경로 지정/변경 → 파일 방식으로 두고 그 파일에서 재로드.
+                    String file = str(req.get("file"), "").trim();
+                    if (file.isEmpty()) { sendJson(ex, 400, "{\"error\":\"파일 경로가 필요합니다.\"}"); return; }
+                    biz.put("sourcesFile", file);
+                    biz.put("sourceMode", "file");
+                    saveConfigFile();
+                    String warn = "", loaded = "0";
+                    try {
+                        List<Src> fresh = resolveSources(biz);
+                        loaded = String.valueOf(fresh.size());
+                        synchronized (CACHE_LOCK) { sourcesCache.put(bizId, fresh); cacheUpdatedAt.put(bizId, now()); saveCache(); }
+                    } catch (Exception re) { warn = " (로드 경고: " + rootMsg(re) + ")"; }
+                    File f = new File(file); if (!f.isAbsolute()) f = new File(baseDir, file);
+                    sendJson(ex, 200, "{\"ok\":true,\"msg\":" + jstr("파일 경로 저장: " + f.getAbsolutePath() + " — 원천사 " + loaded + "건 로드" + warn) + "}");
                     return;
                 }
 
@@ -1119,6 +1138,15 @@ public class SourceLinkChecker {
 
     private static String dbShort(String url) {
         return String.valueOf(url == null ? "" : url).replaceFirst("(?i)^jdbc:oracle:thin:@/*", "");
+    }
+
+    /** sourcesFile 의 실제(절대) 경로. 없으면 "". */
+    private static String sourcesFileAbs(Map<String, Object> biz) {
+        String file = str(biz.get("sourcesFile"), "").trim();
+        if (file.isEmpty()) return "";
+        File f = new File(file);
+        if (!f.isAbsolute()) f = new File(baseDir, file);
+        return f.getAbsolutePath();
     }
 
     /** sourceType(sourceMode 우선, 없으면 파일>config>DB) 에 따라 원천사 로드. */
