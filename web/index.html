@@ -1041,20 +1041,36 @@ function fillBulk(d){
         colRecv[ps.serverId]=(colRecv[ps.serverId]||0)+rc;
       }
     }
-    // 원천사별 합계 (실제/설정). 설정갯수(기대치)와 나란히 표시.
+    // 설정 갯수(기대치)는 원천사 config(currentSources)에서 직접 계산 — 백엔드 버전 무관하게 항상 표기.
+    var srcObj=null; for(var q=0;q<currentSources.length;q++){ if(currentSources[q].id===r.id){ srcObj=currentSources[q]; break; } }
+    var sNd = srcObj ? sendNeedOf(srcObj) : (r.sendNeed||0);
+    var rNd = srcObj ? recvNeedOf(srcObj) : (r.recvNeed||0);
+    var sHasSend = srcObj ? (sendsOf(srcObj).filter(function(e){return e.checkMode!=='skip';}).length>0) : (r.sendApp!==false);
+    var rHasRecv = srcObj ? (recvsOf(srcObj).length>0) : (r.recvApp!==false);
+    var sT = (r.sendTotal!=null)?r.sendTotal:rowS;
+    var rT = (r.recvTotal!=null)?r.recvTotal:rowR;
+    var anyListen=false; for(var li=0;li<per.length;li++){ if(per[li].ok && per[li].recvListening) anyListen=true; }
+    // 원천사별 합계 (실제/설정)
     var totCell=tr.querySelector('[data-tot]');
     if(totCell){
-      var sT=(r.sendTotal!=null)?r.sendTotal:rowS, sNd=(r.sendNeed!=null)?r.sendNeed:0;
-      var rT=(r.recvTotal!=null)?r.recvTotal:rowR, rNd=(r.recvNeed!=null)?r.recvNeed:0;
-      var sTot = (r.sendApp===false)?'<span class="mini mut">송·-</span>'
+      var sTot = !sHasSend ? '<span class="mini mut">송·-</span>'
                  :'<span class="mini '+(sNd>0?(sT>=sNd?'ok':'no'):'tt')+'" title="실제/설정">송·'+sT+'/'+sNd+'</span>';
-      var rTot = (r.recvApp===false)?'<span class="mini mut">수·-</span>'
-                 :'<span class="mini '+(rNd>0?(rT>=rNd?'ok':'no'):'tt')+'" title="실제'+(rNd>0?'/설정':'')+'">수·'+rT+(rNd>0?('/'+rNd):'')+'</span>';
+      var rTot = !rHasRecv ? '<span class="mini mut">수·-</span>'
+                 :'<span class="mini '+(rNd>0?(rT>=rNd?'ok':'no'):(anyListen?'ok':'no'))+'" title="실제'+(rNd>0?'/설정':'')+'">수·'+rT+(rNd>0?('/'+rNd):'')+'</span>';
       totCell.innerHTML=sTot+rTot;
     }
     grandS+=rowS; grandR+=rowR;
-    // 종합상태: 백엔드가 클러스터(서버 전체) 합산으로 판정한 값 사용
-    var overall = r.status || 'mut';
+    // 종합상태: 백엔드 status 우선, 없으면(구버전) 설정값+합산으로 프론트 계산
+    var overall = r.status;
+    if(!overall){
+      if(!sHasSend && !rHasRecv) overall='mut';
+      else {
+        var sMet = !sHasSend || (sNd>0 ? sT>=sNd : sT>0);
+        var rMet = !rHasRecv || (anyListen && (rNd<=0 || rT>=rNd));
+        var sAny = sT>0, rAny = anyListen;
+        overall = (sMet && rMet) ? 'ok' : (((!sHasSend||!sAny) && (!rHasRecv||!rAny)) ? 'bad' : 'warn');
+      }
+    }
     tr.querySelector('[data-dot]').className='rowdot '+overall;
     curOverall[r.id]=overall;
   }
