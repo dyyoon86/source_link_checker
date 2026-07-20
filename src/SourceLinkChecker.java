@@ -1763,14 +1763,14 @@ public class SourceLinkChecker {
                 else if (estab) { if (!er.recvEstabLines.contains(t)) er.recvEstabLines.add(t); }
             }
         }
-        // 송신 결과 (방식별). session 은 기대 세션수(expectSend) 충족 여부까지 본다.
+        // 개별 서버 판정은 '존재 여부'만 본다(예상 세션수 비교는 원천사 총합에서만).
         if (er.isSkip() || !er.hasSend()) { er.sendConnected = false; er.sendCount = 0; }
         else if (er.isProbe()) { er.sendConnected = er.probeOpen; er.sendCount = er.probeOpen ? 1 : 0; }
-        else { er.sendCount = er.sendLines.size(); er.sendConnected = er.sendCount >= (er.expectSend > 0 ? er.expectSend : 1); }
-        // 수신 결과. LISTEN(대기중) + 기대 세션수(expectRecv) 충족 여부.
+        else { er.sendCount = er.sendLines.size(); er.sendConnected = er.sendCount >= 1; }   // 이 서버에 세션 1개라도 있으면 연결됨
+        // 수신: LISTEN(대기중) 여부. 세션 개수는 표시만, 부족 판정 안 함.
         er.recvListening = !er.recvListenLines.isEmpty();
         er.recvEstabCount = er.recvEstabLines.size();
-        er.recvOk = er.recvListening && (er.expectRecv <= 0 || er.recvEstabCount >= er.expectRecv);
+        er.recvOk = er.recvListening;   // 개별 서버는 LISTEN 이면 정상(개수 비교는 총합에서)
     }
 
     /** 출력으로 원천사의 모든 엔드포인트를 채우고 집계. */

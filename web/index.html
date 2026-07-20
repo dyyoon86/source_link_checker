@@ -847,13 +847,10 @@ function sendRow(er, multi, idx){
     statusHtml = er.sendConnected ? statusEl('ok','열림 (OPEN)') : statusEl('bad','닫힘 (CLOSED)');
     badge='<span class="'+(er.sendConnected?'sess-badge':'sess-badge zero')+'">'+(er.sendConnected?'접속 가능':'접속 불가')+'</span>';
   } else {
+    // 개별 서버: 연결됨/미연결 + 세션 개수만 (부족/초과 판정은 합계에서)
     var sendN=(er.sendCount!=null)?er.sendCount:(er.sendLines?er.sendLines.length:0);
-    var expS=er.expectSend||0;
-    var cntTxt = expS>0 ? (sendN+'/'+expS) : (''+sendN);
-    if(er.sendConnected) statusHtml=statusEl('ok','연결됨');
-    else if(sendN>0) statusHtml=statusEl('warn','부족 ('+sendN+'/'+expS+')');
-    else statusHtml=statusEl('bad','미연결');
-    badge='<span class="'+(er.sendConnected?'sess-badge':'sess-badge zero')+'">세션 '+cntTxt+'개</span>';
+    statusHtml = statusEl(sendN>0?'ok':'bad', sendN>0?'연결됨':'미연결');
+    badge='<span class="'+(sendN>0?'sess-badge':'sess-badge zero')+'">세션 '+sendN+'개</span>';
   }
   h+='<div class="row">'+
      '<div class="row-top"><span class="row-name"><span class="tag send">송신</span>'+modeTag(mode)+'</span>'+statusHtml+'</div>'+
@@ -862,21 +859,16 @@ function sendRow(er, multi, idx){
      '</div>';
   return h;
 }
-// 수신 행 (수신포트 유니크 — 동일 포트는 합침). 기대 세션수(expectRecv) 있으면 부족 표시.
+// 수신 행 (수신포트 유니크 — 동일 포트는 합침). 개별 서버: 대기중/닫힘 + 세션 개수만.
 function recvRow(er){
-  var rN=er.recvEstabCount||0, expR=er.expectRecv||0;
-  var recvOk = (er.recvOk!==undefined) ? er.recvOk : er.recvListening;
-  var cnt = expR>0 ? (rN+'/'+expR) : (''+rN);
-  var statusHtml;
-  if(!er.recvListening) statusHtml=statusEl('bad','닫힘');
-  else if(recvOk) statusHtml=statusEl('ok','대기중 (LISTEN)');
-  else statusHtml=statusEl('warn','세션 부족 ('+rN+'/'+expR+')');
-  var sessCls = recvOk ? 'sess-badge' : 'sess-badge zero';
+  var rN=er.recvEstabCount||0;
+  var statusHtml = er.recvListening ? statusEl('ok','대기중 (LISTEN)') : statusEl('bad','닫힘');
+  var sessCls = er.recvListening ? 'sess-badge' : 'sess-badge zero';
   return '<div class="row">'+
      '<div class="row-top"><span class="row-name"><span class="tag recv">수신</span></span>'+
        statusHtml+'</div>'+
      '<div class="row-detail"><span class="addr-chip">↘ :'+esc(er.recvport)+'</span>'+
-       '<span class="'+sessCls+'">세션 '+cnt+'개</span></div>'+
+       '<span class="'+sessCls+'">세션 '+rN+'개</span></div>'+
      sock('소켓 '+((er.recvListenLines?er.recvListenLines.length:0)+(er.recvEstabLines?er.recvEstabLines.length:0))+'건',
           (er.recvListenLines||[]).concat(er.recvEstabLines||[]))+
      '</div>';
