@@ -2,9 +2,10 @@
 classes/
 *.class
 
-# 런타임 생성물 (원천사 캐시 / 조회 이력 / 알람 로그)
+# 런타임 생성물 (원천사 캐시 / 조회 이력 / 임시포트 스냅샷 / 알람 로그)
 *.cache.json
 *.history.json
+*.ports.json
 alarms/
 
 # 의존 jar (라이선스 제약: Oracle ojdbc/orai18n. lib/README.txt 참고해 직접 배치)

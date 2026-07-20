@@ -309,6 +309,7 @@
   .hstat.bad{background:var(--red-5);color:var(--red-text);border:1px solid var(--red-20);}
   .hstat.mut{background:var(--neutral-5);color:var(--text-4);border:1px solid var(--line);}
   .hmode{font-size:11px;font-weight:600;border-radius:var(--r-sm);padding:2px 8px;background:var(--neutral-5);color:var(--text-3);border:1px solid var(--line);}
+  .hmode.alarm{background:var(--short-5);color:var(--short-text);border-color:var(--short-20);}
 
   /* Environment banner (운영/테스트 구분) */
   .envbar{
@@ -1167,11 +1168,12 @@ function renderHistory(entries){
     var e=entries[i];
     var st=e.status||'mut';
     var stTxt = st==='ok'?'정상':(st==='bad'?'장애':(st==='warn'?'주의':'-'));
-    var mode = e.mode==='bulk'?'전체':'단건';
+    var mode = e.mode==='bulk'?'전체':(e.mode==='alarm'?'알람':(e.mode==='flap'?'재접속':'단건'));
+    var mcls = (e.mode==='flap'||e.mode==='alarm')?' alarm':'';
     h+='<tr>'+
        '<td class="mono">'+esc(e.time)+'</td>'+
        '<td>'+esc(e.bizName||e.biz)+'</td>'+
-       '<td><span class="hmode">'+mode+'</span></td>'+
+       '<td><span class="hmode'+mcls+'">'+mode+'</span></td>'+
        '<td class="nm">'+esc(e.target)+'</td>'+
        '<td>'+esc(e.summary)+'</td>'+
        '<td><span class="hstat '+st+'">'+stTxt+'</span></td></tr>';

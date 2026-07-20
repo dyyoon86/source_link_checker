@@ -68,6 +68,11 @@ public class SourceLinkChecker {
     private static final int HISTORY_MAX = 200;
     // 원천사별 마지막 종합상태 (자동 점검 상태변화 알람용, key = biz/id)
     private static final Map<String, String> lastStatus = new java.util.concurrent.ConcurrentHashMap<String, String>();
+    // 재접속(flap) 감지용: 링크(서버·방향·대상)별 직전 tick 의 임시(클라이언트)포트 스냅샷.
+    //   key = "biz/id#serverId|S|ip:port"(송신) 또는 "biz/id#serverId|R|recvport"(수신), value = 정렬 포트 CSV.
+    //   메모리(ConcurrentHashMap) + 파일(.ports.json) 병행 — 서버 재시작 후에도 직전 상태를 이어 flap 오탐/누락 최소화.
+    private static final Map<String, String> portSnap = new java.util.concurrent.ConcurrentHashMap<String, String>();
+    private static File portsFile;
 
     // =====================================================================
     // 데이터 모델
@@ -141,6 +146,8 @@ public class SourceLinkChecker {
         loadCache();
         historyFile = new File(baseDir, base + ".history.json");
         loadHistory();
+        portsFile = new File(baseDir, base + ".ports.json");
+        loadPorts();
 
         // 2) Oracle 드라이버 등록 (DB 조회를 쓸 때만 필요 — 없어도 파일/config 주입은 정상 동작)
         try {
@@ -582,8 +589,29 @@ public class SourceLinkChecker {
                 writeAlarmFile(bizId, bizName, s, prev, sr.status, summary);
             }
             lastStatus.put(skey, sr.status);
+
+            // 재접속(flap) 감지: 임시(클라이언트)포트가 직전 tick과 달라지면 그 사이 끊겼다 재접속한 것.
+            //   종합상태가 안 바뀌는(개수 동일) 조용한 flap 도 잡는다. 자동 점검(주기)에서만 수행.
+            if (auto) {
+                List<String> flaps = detectFlaps(bizId + "/" + s.id + "#", ephemeralPortsOf(sr.perServer), portSnap);
+                if (!flaps.isEmpty()) {
+                    String msg = "재접속 감지: " + String.join("; ", flaps);
+                    Map<String, Object> fl = new LinkedHashMap<String, Object>();
+                    fl.put("time", now());
+                    fl.put("env", str(envCfg.get("tag"), ""));
+                    fl.put("biz", bizId);
+                    fl.put("bizName", bizName);
+                    fl.put("mode", "flap");
+                    fl.put("target", s.name.isEmpty() ? s.id : s.name);
+                    fl.put("summary", msg);
+                    fl.put("status", sr.status);
+                    recordHistory(fl);
+                    writeFlapAlarm(bizId, s, msg);
+                }
+            }
             br.results.add(sr);
         }
+        if (auto) savePorts();   // 이번 tick 임시포트 스냅샷을 파일로(재시작 후에도 이어짐)
 
         // 수동 조회만 요약 이력 기록 (자동 점검은 상태변화 알람만 남김)
         if (!auto) {
@@ -690,6 +718,120 @@ public class SourceLinkChecker {
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
         } catch (Exception e) {
             System.out.println("[alarm] 파일 기록 실패: " + rootMsg(e));
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 재접속(flap) 감지 — 임시(클라이언트)포트가 직전 tick과 달라졌으면 그 사이 끊겼다 재접속한 것.
+    //   세션 개수가 1→1 로 같아 종합상태(정상/주의/장애)는 안 바뀌어도, 임시포트 변화로 flap 을 잡는다.
+    // ---------------------------------------------------------------------
+
+    /** 원천사의 이번 tick 임시(클라이언트)포트 집합. key=linkKey("serverId|S|ip:port" 또는 "serverId|R|recvport"). */
+    private static Map<String, java.util.TreeSet<String>> ephemeralPortsOf(List<CheckResult> perServer) {
+        Map<String, java.util.TreeSet<String>> m = new LinkedHashMap<String, java.util.TreeSet<String>>();
+        for (CheckResult r : perServer) {
+            if (!r.ok) continue;                       // SSH 실패 서버는 스킵(끊김으로 오판 금지)
+            for (EpResult ep : r.eps) {
+                if (ep.sendChecked()) {                // 송신: FEP(로컬)의 임시포트
+                    for (String line : ep.sendLines) {
+                        List<String> a = addrsOf(line);
+                        if (a.isEmpty()) continue;
+                        String p = portOf(a.get(0));   // LOCAL = FEP:임시포트
+                        if (!p.isEmpty()) portKey(m, r.serverId + "|S|" + ep.sendip + ":" + ep.sendport).add(p);
+                    }
+                }
+                if (ep.hasRecv()) {                    // 수신: 원천사(피어)의 임시포트
+                    for (String line : ep.recvEstabLines) {
+                        List<String> a = addrsOf(line);
+                        if (a.size() < 2) continue;
+                        String p = portOf(a.get(a.size() - 1));   // PEER = 원천사:임시포트
+                        if (!p.isEmpty()) portKey(m, r.serverId + "|R|" + ep.recvport).add(p);
+                    }
+                }
+            }
+        }
+        return m;
+    }
+
+    private static java.util.TreeSet<String> portKey(Map<String, java.util.TreeSet<String>> m, String k) {
+        java.util.TreeSet<String> s = m.get(k);
+        if (s == null) { s = new java.util.TreeSet<String>(); m.put(k, s); }
+        return s;
+    }
+
+    /**
+     * 이번 tick 임시포트(cur)를 직전 스냅샷(snap)과 비교해 flap(재접속) 설명 목록을 반환하고 snap 을 갱신한다.
+     *  - flap 조건: 직전에도 있었고(비어있지 않음) 지금도 있는데(비어있지 않음) 포트 집합이 달라짐 → 그 사이 재접속.
+     *  - 이번에 완전히 사라진 링크는 빈값으로 기록(완전 다운) → 재연결은 상태변화 알람이 담당(이중 알람 방지).
+     */
+    private static List<String> detectFlaps(String prefix, Map<String, java.util.TreeSet<String>> cur, Map<String, String> snap) {
+        List<String> flaps = new ArrayList<String>();
+        java.util.Set<String> prevKeys = new java.util.HashSet<String>();
+        for (String k : snap.keySet()) if (k.startsWith(prefix)) prevKeys.add(k);
+        for (Map.Entry<String, java.util.TreeSet<String>> e : cur.entrySet()) {
+            String pkey = prefix + e.getKey();
+            String newCsv = String.join(",", e.getValue());
+            String oldCsv = snap.get(pkey);
+            if (oldCsv != null && !oldCsv.isEmpty() && !newCsv.isEmpty() && !oldCsv.equals(newCsv))
+                flaps.add(flapDesc(e.getKey(), oldCsv, newCsv));
+            snap.put(pkey, newCsv);
+            prevKeys.remove(pkey);
+        }
+        for (String gone : prevKeys) snap.put(gone, "");   // 이번 tick 사라진 링크 = 완전 다운
+        return flaps;
+    }
+
+    /** linkKey("serverId|S|ip:port" / "serverId|R|port") + 포트변화 -> 사람이 읽는 설명. */
+    private static String flapDesc(String linkKey, String oldCsv, String newCsv) {
+        String[] p = linkKey.split("\\|", 3);
+        String sv  = p.length > 0 ? p[0] : "";
+        String dir = p.length > 1 ? ("S".equals(p[1]) ? "송신" : "수신") : "";
+        String tgt = p.length > 2 ? p[2] : "";
+        return "[" + sv + "] " + dir + " " + tgt + " 임시포트 " + oldCsv + " → " + newCsv;
+    }
+
+    /** flap(재접속) 을 알람 로그 파일에 한 줄 append. writeAlarmFile 과 같은 파일/포맷 계열. */
+    private static void writeFlapAlarm(String bizId, Src s, String msg) {
+        try {
+            File dir = alarmDir();
+            if (!dir.isDirectory() && !dir.mkdirs()) { System.out.println("[alarm] 디렉토리 생성 실패: " + dir.getAbsolutePath()); return; }
+            String day = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
+            File f = new File(dir, "alarm-" + day + ".log");
+            String line = now() + " | " + str(envCfg.get("tag"), "-")
+                    + " | " + bizId + "/" + s.id
+                    + " | " + (s.name.isEmpty() ? s.id : s.name)
+                    + " | 재접속감지(FLAP)"
+                    + " | " + msg + System.lineSeparator();
+            Files.write(f.toPath(), line.getBytes(StandardCharsets.UTF_8),
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) { System.out.println("[alarm] flap 기록 실패: " + rootMsg(e)); }
+    }
+
+    private static void loadPorts() {
+        try {
+            if (portsFile == null || !portsFile.isFile()) return;
+            String txt = new String(Files.readAllBytes(portsFile.toPath()), StandardCharsets.UTF_8);
+            Map<String, Object> root = asMap(Json.parse(txt));
+            for (Map.Entry<String, Object> e : root.entrySet()) portSnap.put(e.getKey(), str(e.getValue(), ""));
+            System.out.println("[ports] 로드: " + portsFile.getName() + " (링크 " + portSnap.size() + ")");
+        } catch (Exception e) {
+            System.out.println("[ports] 로드 실패 (무시하고 빈 스냅샷으로 시작): " + rootMsg(e));
+        }
+    }
+
+    private static synchronized void savePorts() {
+        try {
+            if (portsFile == null) return;
+            StringBuilder sb = new StringBuilder("{\n");
+            int i = 0;
+            for (Map.Entry<String, String> e : portSnap.entrySet()) {
+                if (i++ > 0) sb.append(",\n");
+                sb.append("  ").append(jstr(e.getKey())).append(": ").append(jstr(e.getValue()));
+            }
+            sb.append("\n}\n");
+            Files.write(portsFile.toPath(), sb.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            System.out.println("[ports] 저장 실패: " + rootMsg(e));
         }
     }
 
