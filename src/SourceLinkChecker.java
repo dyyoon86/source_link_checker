@@ -485,6 +485,7 @@ public class SourceLinkChecker {
         String status = "mut";
         SrcStat stat = new SrcStat();   // 클러스터 합산 통계(실제/기대)
         List<CheckResult> perServer = new ArrayList<CheckResult>();
+        List<String> flaps = new ArrayList<String>();   // 이번 조회에서 감지된 재접속(임시포트 변화) 설명
     }
 
     /** 전체 점검 1회 결과. */
@@ -590,28 +591,28 @@ public class SourceLinkChecker {
             }
             lastStatus.put(skey, sr.status);
 
-            // 재접속(flap) 감지: 임시(클라이언트)포트가 직전 tick과 달라지면 그 사이 끊겼다 재접속한 것.
-            //   종합상태가 안 바뀌는(개수 동일) 조용한 flap 도 잡는다. 자동 점검(주기)에서만 수행.
-            if (auto) {
-                List<String> flaps = detectFlaps(bizId + "/" + s.id + "#", ephemeralPortsOf(sr.perServer), portSnap);
-                if (!flaps.isEmpty()) {
-                    String msg = "재접속 감지: " + String.join("; ", flaps);
-                    Map<String, Object> fl = new LinkedHashMap<String, Object>();
-                    fl.put("time", now());
-                    fl.put("env", str(envCfg.get("tag"), ""));
-                    fl.put("biz", bizId);
-                    fl.put("bizName", bizName);
-                    fl.put("mode", "flap");
-                    fl.put("target", s.name.isEmpty() ? s.id : s.name);
-                    fl.put("summary", msg);
-                    fl.put("status", sr.status);
-                    recordHistory(fl);
-                    writeFlapAlarm(bizId, s, msg);
-                }
+            // 재접속(flap) 감지: 임시(클라이언트)포트가 직전 조회와 달라지면 그 사이 끊겼다 재접속한 것.
+            //   종합상태가 안 바뀌는(개수 동일) 조용한 flap 도 잡는다.
+            //   ★ 자동 점검과 수동 '선택 연결 조회' 모두에서 수행 — 같은 '직전 스냅샷'(portSnap)을 공유.
+            List<String> flaps = detectFlaps(bizId + "/" + s.id + "#", ephemeralPortsOf(sr.perServer), portSnap);
+            if (!flaps.isEmpty()) {
+                sr.flaps = flaps;                       // 조회 응답으로 화면에 표시
+                String msg = "재접속 감지: " + String.join("; ", flaps);
+                Map<String, Object> fl = new LinkedHashMap<String, Object>();
+                fl.put("time", now());
+                fl.put("env", str(envCfg.get("tag"), ""));
+                fl.put("biz", bizId);
+                fl.put("bizName", bizName);
+                fl.put("mode", "flap");
+                fl.put("target", s.name.isEmpty() ? s.id : s.name);
+                fl.put("summary", msg);
+                fl.put("status", sr.status);
+                recordHistory(fl);
+                writeFlapAlarm(bizId, s, msg);
             }
             br.results.add(sr);
         }
-        if (auto) savePorts();   // 이번 tick 임시포트 스냅샷을 파일로(재시작 후에도 이어짐)
+        savePorts();   // 이번 조회의 임시포트 스냅샷을 파일로(재시작 후에도 이어짐 · 자동/수동 공용)
 
         // 수동 조회만 요약 이력 기록 (자동 점검은 상태변화 알람만 남김)
         if (!auto) {
@@ -679,6 +680,7 @@ public class SourceLinkChecker {
               .append(",\"sendNeed\":").append(sr.stat.sendNeed)
               .append(",\"recvTotal\":").append(sr.stat.recvTotal)
               .append(",\"recvNeed\":").append(sr.stat.recvNeed)
+              .append(",\"flaps\":").append(jarr(sr.flaps))
               .append(",\"servers\":").append(per).append('}');
         }
         return sb.append("]}").toString();

@@ -300,6 +300,8 @@
   .toast .t{background:var(--text-1);color:#fff;border-radius:var(--r-md);padding:12px 16px;font-size:13px;
     box-shadow:0 6px 24px rgba(0,0,0,.25);border-left:4px solid var(--orange);}
   .toast .t.bad{border-left-color:var(--red);}
+  .toast .t.flap{border-left-color:var(--warn);}
+  .toast .t .tsub{margin-top:4px;font-size:11px;color:#cfd2d6;font-family:var(--mono);line-height:1.5;}
   .toast .t b{color:#ffd9c9;}
   /* 이력 상태 배지 */
   .hstat{font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;}
@@ -462,6 +464,7 @@ var currentView = 'bulk';
 var autoTimer = null;   // 자동 점검 타이머
 var statusSnapshot = {};// 직전 종합상태 스냅샷 (id -> ok/warn/bad) — 변화 감지용
 var curOverall = {};    // 이번 fillBulk 의 종합상태
+var curFlaps = [];      // 이번 조회에서 감지된 재접속(flap) [{id,name,msgs[]}]
 
 // 뷰 토글
 $('vtBulk').onclick   = function(){ setView('bulk'); };
@@ -984,7 +987,8 @@ function runBulkCheck(){
       btn.disabled=false; btn.textContent=old; if(fab){ fab.disabled=false; fab.textContent=fabOld; }
       if(d.error){ alert('조회 실패: '+d.error); return; }
       fillBulk(d);
-      statusSnapshot=copyMap(curOverall);   // 수동 조회는 기준점만 갱신(알람 없음)
+      statusSnapshot=copyMap(curOverall);   // 수동 조회는 종합상태 토스트는 안 띄우고 기준점만 갱신
+      if(curFlaps.length) showToast([], curFlaps);   // 단, 재접속(flap)은 화면에 알림
       if(currentView==='history') loadHistoryView();
     }).catch(function(e){ btn.disabled=false; btn.textContent=old; if(fab){ fab.disabled=false; fab.textContent=fabOld; } alert(String(e)); });
 }
@@ -1055,26 +1059,31 @@ function detectChanges(){
     if(oldv!==undefined && oldv!==nv){ changes.push({id:id,from:oldv,to:nv,name:nameOf(id)}); flashRow(id); }
   }
   statusSnapshot=copyMap(curOverall);
-  if(changes.length){ showToast(changes); if(currentView==='history') loadHistoryView(); }
+  if(changes.length || curFlaps.length){ showToast(changes, curFlaps); if(currentView==='history') loadHistoryView(); }
 }
 function flashRow(id){
   var tr=findRow($('bulkWrap'), id); if(!tr) return;
   tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
 }
-function showToast(changes){
+function showToast(changes, flaps){
+  changes=changes||[]; flaps=flaps||[];
   var t=$('toast'), html='';
   for(var i=0;i<changes.length;i++){ var c=changes[i]; var cls=(c.to==='bad')?'bad':'';
     html+='<div class="t '+cls+'">⚠ <b>'+esc(c.name)+'</b> : '+koStatus(c.from)+' → <b>'+koStatus(c.to)+'</b></div>'; }
+  for(var k=0;k<flaps.length;k++){ var f=flaps[k];
+    html+='<div class="t flap">🔄 <b>'+esc(f.name)+'</b> 재접속 감지(세션 바뀜)<div class="tsub">'+esc(f.msgs.join(' · '))+'</div></div>'; }
+  if(!html){ t.style.display='none'; return; }
   t.innerHTML=html; t.style.display='flex';
-  clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, 12000);
+  clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display='none'; }, 15000);
 }
 
 function fillBulk(d){
   var M=(d.servers||[]).length, res=d.results||[], wrap=$('bulkWrap');
   var colSend={}, colRecv={}, grandS=0, grandR=0;
-  curOverall={};
+  curOverall={}; curFlaps=[];
   for(var i=0;i<res.length;i++){
     var r=res[i], tr=findRow(wrap, r.id); if(!tr) continue;
+    if(r.flaps && r.flaps.length){ curFlaps.push({id:r.id, name:nameOf(r.id)||r.id, msgs:r.flaps}); flashRow(r.id); }
     var per=r.servers||[], rowS=0, rowR=0;
     for(var j=0;j<per.length;j++){
       var ps=per[j];
