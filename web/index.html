@@ -520,6 +520,8 @@ function makeTab(b, active){
     renderDbTarget();
     loadSshStatus();
     loadSources();
+    // 설정 화면을 보는 중이면 상단 업무 전환에 맞춰 설정도 다시 로드(다른 업무 파일이 안 바뀌던 버그)
+    if(currentView==='settings'){ setBiz = b.id; loadSettings(); }
   };
   return el;
 }
@@ -1083,13 +1085,14 @@ function fillBulk(d){
       if(cell){
         if(!ps.ok){ cell.innerHTML='<span class="mini err" title="'+esc(ps.error||'')+'">⚠</span>'; }
         else {
-          // 송신: 판정 대상 아니면(skip) '송·-' 회색
+          // 개별 서버 셀: '존재 기준'으로 색. 세션 1개라도 있거나(또는 LISTEN 중이면) 초록.
+          // (예상수 대비 부족/초과 판정은 합계에서만 — 개별 서버는 붙어있으면 정상)
           var sHtml;
           if(r.sendApp===false){ sHtml='<span class="mini mut" title="송신 제외(연결유지 아님)">송·-</span>'; }
-          else { var sN=(ps.sendCount!=null)?ps.sendCount:(ps.sendConnected?1:0); sHtml='<span class="mini '+(ps.sendConnected?'ok':'no')+'">송·'+sN+'</span>'; }
+          else { var sN=(ps.sendCount!=null)?ps.sendCount:(ps.sendConnected?1:0); var sPres=(sN>0)||ps.sendConnected; sHtml='<span class="mini '+(sPres?'ok':'no')+'">송·'+sN+'</span>'; }
           var rHtml;
           if(r.recvApp===false){ rHtml='<span class="mini mut">수·-</span>'; }
-          else { var rN=ps.recvEstabCount||0; rHtml='<span class="mini '+(ps.recvListening?'ok':'no')+'">수·'+rN+'</span>'; }
+          else { var rN=ps.recvEstabCount||0; var rPres=(rN>0)||ps.recvListening; rHtml='<span class="mini '+(rPres?'ok':'no')+'">수·'+rN+'</span>'; }
           cell.innerHTML=sHtml+rHtml;
         }
       }
