@@ -30,11 +30,15 @@
     --amber: #D54000;
     --amber-5: #FFEFE7;
     --amber-20: #FFCFBD;
-    /* 상태 '주의' = 노란색 (초과/부족/일부/실패) */
-    --warn: #F5B301;          /* 노랑 */
+    /* 상태색: 정상=초록, 초과=노랑, 부족=주황, 장애=빨강 */
+    --warn: #F5B301;          /* 노랑 = 초과 */
     --warn-5: #FFF8E1;
     --warn-20: #FCE4A6;
     --warn-text: #9A6A00;
+    --short: #FB8C00;         /* 주황 = 부족 */
+    --short-5: #FFF3E0;
+    --short-20: #FFD8A8;
+    --short-text: #A85800;
     --neutral-5: #F6F6F9;
     --disabled: #D1D1D5;
     --r-sm:4px; --r-md:8px; --r-lg:12px; --r-base:16px;
@@ -131,7 +135,8 @@
   .tile .t-val{font-size:26px;font-weight:700;letter-spacing:-0.03em;}
   .tile .t-val small{font-size:15px;color:var(--text-4);font-weight:500;}
   .tile.ok .t-val{color:var(--green-text);}
-  .tile.warn .t-val{color:var(--warn-text);}
+  .tile.warn .t-val, .tile.excess .t-val{color:var(--warn-text);}
+  .tile.short .t-val{color:var(--short-text);}
   .tile.bad .t-val{color:var(--red-text);}
 
   /* Server grid */
@@ -254,9 +259,9 @@
   .btable .mono{font-family:var(--mono);color:var(--text-2);}
   .btable .st{white-space:nowrap;font-weight:600;}
   .btable .st .frac{font-family:var(--mono);}
-  .st.ok{color:var(--green-text);} .st.warn{color:var(--warn-text);} .st.bad{color:var(--red-text);} .st.mut{color:var(--text-4);}
+  .st.ok{color:var(--green-text);} .st.warn,.st.excess{color:var(--warn-text);} .st.short{color:var(--short-text);} .st.bad{color:var(--red-text);} .st.mut{color:var(--text-4);}
   .btable .rowdot{display:inline-block;width:9px;height:9px;border-radius:99px;background:var(--text-4);margin-right:2px;}
-  .rowdot.ok{background:var(--green);} .rowdot.warn{background:var(--warn);} .rowdot.bad{background:var(--red);}
+  .rowdot.ok{background:var(--green);} .rowdot.warn,.rowdot.excess{background:var(--warn);} .rowdot.short{background:var(--short);} .rowdot.bad{background:var(--red);}
   .btable td.errcell{color:var(--red-text);font-size:12px;}
   .bwrap-scroll{overflow-x:auto;}
   .btable th.svr{text-align:center;white-space:nowrap;}
@@ -265,7 +270,8 @@
     border-radius:var(--r-sm);padding:2px 6px;margin:0 2px;border:1px solid var(--line);}
   .mini.ok{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
   .mini.no{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
-  .mini.warn{background:var(--warn-5);color:var(--warn-text);border-color:var(--warn-20);}
+  .mini.warn,.mini.excess{background:var(--warn-5);color:var(--warn-text);border-color:var(--warn-20);}
+  .mini.short{background:var(--short-5);color:var(--short-text);border-color:var(--short-20);}
   .mini.mut{background:var(--neutral-5);color:var(--text-4);}
   .mini.err{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
   .mini.tt{background:var(--panel2,#eef1f5);background:#eef1f5;color:var(--text-2);border-color:var(--line);}
@@ -295,7 +301,8 @@
   /* 이력 상태 배지 */
   .hstat{font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;}
   .hstat.ok{background:var(--green-5);color:var(--green-text);border:1px solid var(--green-20);}
-  .hstat.warn{background:var(--warn-5);color:var(--warn-text);border:1px solid var(--warn-20);}
+  .hstat.warn,.hstat.excess{background:var(--warn-5);color:var(--warn-text);border:1px solid var(--warn-20);}
+  .hstat.short{background:var(--short-5);color:var(--short-text);border:1px solid var(--short-20);}
   .hstat.bad{background:var(--red-5);color:var(--red-text);border:1px solid var(--red-20);}
   .hstat.mut{background:var(--neutral-5);color:var(--text-4);border:1px solid var(--line);}
   .hmode{font-size:11px;font-weight:600;border-radius:var(--r-sm);padding:2px 8px;background:var(--neutral-5);color:var(--text-3);border:1px solid var(--line);}
@@ -708,8 +715,8 @@ function render(d){
   // Summary tiles: 클러스터 합산 실제/설정 (초과/부족이면 노랑)
   var sendApp = sendApplicableOf(s), recvApp = recvApplicableOf(s);
   var sNeed=sendNeedOf(s), rNeed=recvNeedOf(s);
-  var sSt=d.sendState||(!sendApp?'na':(sNeed>0?(sendTotal===sNeed?'ok':(sendTotal===0?'absent':'mismatch')):(sendTotal>0?'ok':'absent')));
-  var rSt=d.recvState||(!recvApp?'na':(recvTotal>0?(rNeed>0?(recvTotal===rNeed?'ok':'mismatch'):'ok'):'absent'));
+  var sSt=d.sendState||(!sendApp?'na':(sendTotal===0?'absent':(sNeed>0?(sendTotal===sNeed?'ok':(sendTotal>sNeed?'excess':'short')):'ok')));
+  var rSt=d.recvState||(!recvApp?'na':(recvTotal===0?'absent':(rNeed>0?(recvTotal===rNeed?'ok':(recvTotal>rNeed?'excess':'short')):'ok')));
   html+='<div class="summary">'+
         (sendApp ? tileFracState('송신 세션 (실제/설정)', sendTotal, sNeed, sSt) : tileTxt('송신', '해당없음', 'mut'))+
         (recvApp ? (rNeed>0 ? tileFracState('수신 세션 (실제/설정)', recvTotal, rNeed, rSt) : tileNum('수신 세션', recvTotal, recvTotal>0?'ok':'warn')) : tileTxt('수신', '해당없음', 'mut'))+
@@ -743,9 +750,9 @@ function tileTxt(lbl, txt, klass){
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
          '<div class="t-val" style="font-size:18px">'+txt+'</div></div>';
 }
-// 실제/설정 타일 (상태 기반: ok=초록, mismatch(부족/초과)=노랑, absent=빨강)
+// 실제/설정 타일 (ok=초록, excess=노랑, short=주황, absent=빨강)
 function tileFracState(lbl, cnt, need, state){
-  var klass = state==='ok'?'ok':(state==='mismatch'?'warn':(state==='absent'?'bad':'mut'));
+  var klass = state==='ok'?'ok':(state==='excess'?'excess':(state==='short'?'short':(state==='absent'?'bad':'mut')));
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
          '<div class="t-val">'+cnt+' <small>/ '+(need>0?need:'-')+'</small></div></div>';
 }
@@ -762,15 +769,19 @@ function recvNeedOf(s){
   var n=0; for(var k in byKey){ n+=(byKey[k]>0?byKey[k]:0); } return n;
 }
 // 종합 상태 배지
+// 상태별 색 (정상=초록/초과=노랑/부족=주황/장애=빨강/점검없음=회색)
+function stColors(st){
+  if(st==='ok') return {ko:'정상',col:'var(--green-text)',bg:'var(--green-5)',dot:'var(--green)'};
+  if(st==='excess') return {ko:'초과',col:'var(--warn-text)',bg:'var(--warn-5)',dot:'var(--warn)'};
+  if(st==='short'||st==='warn') return {ko:st==='warn'?'주의':'부족',col:'var(--short-text)',bg:'var(--short-5)',dot:'var(--short)'};
+  if(st==='bad') return {ko:'장애',col:'var(--red-text)',bg:'var(--red-5)',dot:'var(--red)'};
+  return {ko:'점검없음',col:'var(--text-4)',bg:'var(--neutral-5)',dot:'var(--text-4)'};
+}
 function statusPill(st){
-  st=st||'mut';
-  var ko = st==='ok'?'정상':(st==='bad'?'장애':(st==='warn'?'주의':'점검없음'));
-  var col = st==='ok'?'var(--green-text)':(st==='bad'?'var(--red-text)':(st==='warn'?'var(--warn-text)':'var(--text-4)'));
-  var bg = st==='ok'?'var(--green-5)':(st==='bad'?'var(--red-5)':(st==='warn'?'var(--warn-5)':'var(--neutral-5)'));
-  var dotc = st==='ok'?'var(--green)':(st==='bad'?'var(--red)':(st==='warn'?'var(--warn)':'var(--text-4)'));
+  var c=stColors(st||'mut');
   return '<div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;'+
-    'background:'+bg+';color:'+col+';font-weight:700;font-size:15px">'+
-    '<span style="width:10px;height:10px;border-radius:99px;background:'+dotc+'"></span>종합 상태: '+ko+'</div>';
+    'background:'+c.bg+';color:'+c.col+';font-weight:700;font-size:15px">'+
+    '<span style="width:10px;height:10px;border-radius:99px;background:'+c.dot+'"></span>종합 상태: '+c.ko+'</div>';
 }
 function tileNum(lbl, n, klass){
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
@@ -931,11 +942,12 @@ function renderBulkTable(){
   h+='</tbody>'+foot+'</table></div>';
   h+='<div class="updated" style="margin-top:10px;flex-direction:column;align-items:flex-start;gap:6px">'+
      '<div><b>종합 상태(원천사 앞 점)</b> : '+
-       '<span class="rowdot ok"></span> <span style="color:var(--green-text)">정상</span> — 실제 세션수가 설정과 <b>정확히 일치</b> · '+
-       '<span class="rowdot warn"></span> <span style="color:var(--warn-text)">주의(노랑)</span> — <b>부족하거나 초과</b>(설정≠실제), 일부만 정상, 또는 서버 점검 실패 · '+
-       '<span class="rowdot bad"></span> <span style="color:var(--red-text)">장애</span> — 세션 <b>전혀 없음</b> · '+
-       '<span class="rowdot"></span> <span style="color:var(--text-4)">점검없음</span> — 점검 대상 아님</div>'+
-     '<div><b>셀/합계</b> : <span class="mini ok">송·N</span> 정상 · <span class="mini warn">송·2/3</span> 부족·초과(설정과 다름) · <span class="mini no">수·N</span> 없음/닫힘 · <span class="mini mut">송·-</span> 제외 · <span class="mini err">⚠</span> 서버 점검 실패</div>'+
+       '<span class="rowdot ok"></span> <span style="color:var(--green-text)">정상(초록)</span> — 설정과 <b>정확히 일치</b> · '+
+       '<span class="rowdot excess"></span> <span style="color:var(--warn-text)">초과(노랑)</span> — 설정보다 <b>많이</b> 붙음 · '+
+       '<span class="rowdot short"></span> <span style="color:var(--short-text)">부족(주황)</span> — 설정보다 <b>적게</b> 붙음/일부만/점검실패 · '+
+       '<span class="rowdot bad"></span> <span style="color:var(--red-text)">장애(빨강)</span> — <b>아예 안 붙음</b> · '+
+       '<span class="rowdot"></span> <span style="color:var(--text-4)">점검없음</span></div>'+
+     '<div><b>셀/합계</b> : <span class="mini ok">송·2/2</span> 정상 · <span class="mini excess">송·3/2</span> 초과 · <span class="mini short">송·1/2</span> 부족 · <span class="mini no">수·0</span> 없음 · <span class="mini mut">송·-</span> 제외 · <span class="mini err">⚠</span> 점검 실패</div>'+
      '</div>';
   wrap.innerHTML=h;
   var cbAll=$('cbAll');
@@ -980,7 +992,7 @@ function runBulkCheck(){
 }
 
 function copyMap(m){ var o={}; for(var k in m) o[k]=m[k]; return o; }
-function koStatus(s){ return s==='ok'?'정상':(s==='bad'?'장애':(s==='warn'?'주의':'-')); }
+function koStatus(s){ return s==='ok'?'정상':(s==='excess'?'초과':(s==='short'?'부족':(s==='bad'?'장애':(s==='warn'?'주의':'-')))); }
 function nowTime(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
 function nameOf(id){ for(var i=0;i<currentSources.length;i++){ if(currentSources[i].id===id) return currentSources[i].name||id; } return id; }
 
@@ -1098,10 +1110,10 @@ function fillBulk(d){
     var sT = (r.sendTotal!=null)?r.sendTotal:rowS;
     var rT = (r.recvTotal!=null)?r.recvTotal:rowR;
     var anyListen=false; for(var li=0;li<per.length;li++){ if(per[li].ok && per[li].recvListening) anyListen=true; }
-    // 축 상태(정확히 일치=ok, 부족/초과=mismatch(노랑), 없음=absent). 백엔드 state 우선.
-    var sSt = r.sendState || (!sHasSend?'na':(sNd>0?(sT===sNd?'ok':(sT===0?'absent':'mismatch')):(sT>0?'ok':'absent')));
-    var rSt = r.recvState || (!rHasRecv?'na':(!anyListen?'absent':(rNd>0?(rT===rNd?'ok':'mismatch'):'ok')));
-    var stCls=function(s){ return s==='ok'?'ok':(s==='mismatch'?'warn':(s==='absent'?'no':'mut')); };
+    // 축 상태: ok(정확)/excess(초과 노랑)/short(부족 주황)/absent(없음 빨강). 백엔드 state 우선, 없으면 합산 계산.
+    var sSt = r.sendState || (!sHasSend?'na':(sT===0?'absent':(sNd>0?(sT===sNd?'ok':(sT>sNd?'excess':'short')):'ok')));
+    var rSt = r.recvState || (!rHasRecv?'na':(!anyListen?'absent':(rNd>0?(rT===rNd?'ok':(rT>rNd?'excess':'short')):'ok')));
+    var stCls=function(s){ return s==='ok'?'ok':(s==='excess'?'excess':(s==='short'?'short':(s==='absent'?'no':'mut'))); };
     // 원천사별 합계 (실제/설정). 초과/부족이면 노랑.
     var totCell=tr.querySelector('[data-tot]');
     if(totCell){
@@ -1112,13 +1124,12 @@ function fillBulk(d){
       totCell.innerHTML=sTot+rTot;
     }
     grandS+=rowS; grandR+=rowR;
-    // 종합상태: 백엔드 status 우선, 없으면 축 상태로 계산
+    // 종합상태: 백엔드 status 우선, 없으면 축 상태 중 최악(장애>부족>초과>정상)
     var overall = r.status;
     if(!overall){
-      if(sSt==='na' && rSt==='na') overall='mut';
-      else if((sSt==='ok'||sSt==='na') && (rSt==='ok'||rSt==='na')) overall='ok';
-      else if((sSt==='absent'||sSt==='na') && (rSt==='absent'||rSt==='na')) overall='bad';
-      else overall='warn';
+      var sev=function(s){ return s==='absent'?4:(s==='short'?3:(s==='excess'?2:(s==='ok'?1:0))); };
+      var v=Math.max(sev(sSt),sev(rSt));
+      overall = (sSt==='na'&&rSt==='na')?'mut':(v>=4?'bad':(v===3?'short':(v===2?'excess':(v===1?'ok':'mut'))));
     }
     tr.querySelector('[data-dot]').className='rowdot '+overall;
     curOverall[r.id]=overall;

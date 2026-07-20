@@ -1425,6 +1425,8 @@ public class SourceLinkChecker {
 
     private static String statusKo(String st) {
         if ("ok".equals(st)) return "정상";
+        if ("excess".equals(st)) return "초과";
+        if ("short".equals(st)) return "부족";
         if ("warn".equals(st)) return "주의";
         if ("bad".equals(st)) return "장애";
         return "-";
@@ -1480,39 +1482,57 @@ public class SourceLinkChecker {
         }
         st.sendApp = !sendAgg.isEmpty();
         st.recvApp = !recvAgg.isEmpty();
-        // 송신 엔드포인트별 상태: 0=OK, 1=MISMATCH(부족/초과), 2=ABSENT
-        int sOk = 0, sMis = 0, sAbs = 0;
+        // 엔드포인트별 상태: 0=OK(정확), 1=EXCESS(초과), 2=SHORT(부족), 3=ABSENT(없음)
+        int sOk = 0, sExc = 0, sSht = 0, sAbs = 0, sN = 0;
         for (int[] a : sendAgg.values()) {
             int exp = a[0], total = a[1], probe = a[2];
             st.sendTotal += total; st.sendNeed += (exp > 0 ? exp : 1);
             int state;
-            if (probe == 1) state = total >= 1 ? 0 : 2;
-            else if (exp > 0) state = (total == exp) ? 0 : (total == 0 ? 2 : 1);   // 정확히 일치만 OK, 부족/초과=MIS
-            else state = total >= 1 ? 0 : 2;
-            if (state == 0) sOk++; else if (state == 1) sMis++; else sAbs++;
+            if (total == 0) state = 3;                              // 없음
+            else if (probe == 1) state = 0;                         // probe 열림 → 정상(초과 개념 없음)
+            else if (exp > 0) state = (total == exp) ? 0 : (total > exp ? 1 : 2);   // 초과/부족
+            else state = 0;                                         // 미지정: 붙어있으면 정상
+            if (state == 0) sOk++; else if (state == 1) sExc++; else if (state == 2) sSht++; else sAbs++;
+            sN++;
         }
-        int rOk = 0, rMis = 0, rAbs = 0;
+        int rOk = 0, rExc = 0, rSht = 0, rAbs = 0, rN = 0;
         for (int[] b : recvAgg.values()) {
             int exp = b[0], total = b[1], lis = b[2];
             st.recvTotal += total; st.recvNeed += (exp > 0 ? exp : 0);
             int state;
-            if (lis == 0) state = 2;                              // 닫힘
-            else if (exp > 0) state = (total == exp) ? 0 : 1;    // 리슨중: 정확히 = OK, 부족/초과=MIS
-            else state = 0;                                       // 미지정: 리슨이면 OK
-            if (state == 0) rOk++; else if (state == 1) rMis++; else rAbs++;
+            if (lis == 0) state = 3;                                // 닫힘/없음
+            else if (exp > 0) state = (total == exp) ? 0 : (total > exp ? 1 : 2);
+            else state = 0;                                         // 미지정: 리슨이면 정상
+            if (state == 0) rOk++; else if (state == 1) rExc++; else if (state == 2) rSht++; else rAbs++;
+            rN++;
         }
-        st.sendState = !st.sendApp ? "na" : (sMis == 0 && sAbs == 0 ? "ok" : (sOk == 0 && sMis == 0 ? "absent" : "mismatch"));
-        st.recvState = !st.recvApp ? "na" : (rMis == 0 && rAbs == 0 ? "ok" : (rOk == 0 && rMis == 0 ? "absent" : "mismatch"));
+        st.sendState = axisState(sN, sOk, sExc, sSht, sAbs);
+        st.recvState = axisState(rN, rOk, rExc, rSht, rAbs);
 
-        if (M == 0 || (!st.sendApp && !st.recvApp)) { st.status = "mut"; return st; }
-        boolean sendOk = st.sendState.equals("ok") || st.sendState.equals("na");
-        boolean recvOk = st.recvState.equals("ok") || st.recvState.equals("na");
-        if (st.errCnt == 0 && sendOk && recvOk) { st.status = "ok"; return st; }
-        boolean sendDown = st.sendState.equals("na") || st.sendState.equals("absent");
-        boolean recvDown = st.recvState.equals("na") || st.recvState.equals("absent");
-        if (st.errCnt == 0 && sendDown && recvDown) { st.status = "bad"; return st; }
-        st.status = "warn";
+        if (M == 0 || (st.sendState.equals("na") && st.recvState.equals("na"))) { st.status = "mut"; return st; }
+        int sev = Math.max(stateSev(st.sendState), stateSev(st.recvState));
+        if (st.errCnt > 0) sev = Math.max(sev, 3);                  // 서버 점검 실패 → 최소 부족(주황)
+        st.status = sevStatus(sev);
         return st;
+    }
+
+    /** 축(송신/수신) 종합 상태. 전부없음=absent, 전부일치=ok, 부족/일부없음=short, 나머지(초과만)=excess. */
+    private static String axisState(int n, int ok, int exc, int sht, int abs) {
+        if (n == 0) return "na";
+        if (abs == n) return "absent";
+        if (ok == n) return "ok";
+        if (sht > 0 || abs > 0) return "short";   // 부족하거나 일부 완전 없음
+        return "excess";                          // 나머지는 초과만
+    }
+    private static int stateSev(String s) {
+        if ("absent".equals(s)) return 4;
+        if ("short".equals(s)) return 3;
+        if ("excess".equals(s)) return 2;
+        if ("ok".equals(s)) return 1;
+        return 0;   // na
+    }
+    private static String sevStatus(int sev) {
+        return sev >= 4 ? "bad" : (sev == 3 ? "short" : (sev == 2 ? "excess" : (sev == 1 ? "ok" : "mut")));
     }
 
     /** 상태 요약 문자열 (송신 실제/기대 · 수신 실제/기대 · 실패). */
