@@ -1326,7 +1326,9 @@ function renderSettings(){
        fileBar+
        '<div id="srcList">'+srcsHtml+'</div>'+
        '<button class="addbtn add-src" style="margin-top:6px">+ 원천사</button>'+
-       '<div class="setbar setbar-sticky"><button class="btn-primary" id="saveSrc">💾 원천사 저장</button><span class="savemsg" id="msgSrc"></span><span style="flex:1"></span><span style="font-size:12px;color:var(--text-4)">어디서 수정하든 이 버튼으로 저장</span></div></div>';
+       '<div class="setbar setbar-sticky"><button class="btn-primary" id="saveSrc">💾 원천사 저장</button>'+
+       '<button class="addbtn" id="exportSrc" title="지금 화면에 편집 중인 원천사 목록을 엑셀(.xlsx) 파일로 내려받습니다(저장 안 해도 됨)">⬇ 엑셀로 내보내기</button>'+
+       '<span class="savemsg" id="msgSrc"></span><span style="flex:1"></span><span style="font-size:12px;color:var(--text-4)">어디서 수정하든 이 버튼으로 저장</span></div></div>';
   } else if(b){
     h+='<div class="setcard"><h3>원천사 목록 <span class="badge">'+esc(typeKo)+'</span></h3>'+
        '<div class="setnote warn">이 업무는 DB(oracle) 방식이라 여기서 편집할 수 없습니다. sourcesFile/sources 방식으로 전환하면 편집 가능합니다.</div></div>';
@@ -1370,6 +1372,7 @@ function wireSettings(){
   };
   if($('saveMon')) $('saveMon').onclick=saveMonitor;
   if($('saveSrc')) $('saveSrc').onclick=saveSources;
+  if($('exportSrc')) $('exportSrc').onclick=exportSourcesXlsx;
   if($('saveSrv')) $('saveSrv').onclick=saveServers;
   if($('saveOra')) $('saveOra').onclick=saveOracle;
   if($('exportDb')) $('exportDb').onclick=exportDbToFile;
@@ -1456,6 +1459,24 @@ function saveSources(){
   var srcs=collectSources();
   for(var i=0;i<srcs.length;i++) if(!srcs[i].id){ setMsg('msgSrc','원천사 ID를 모두 입력하세요.',true); return; }
   postConfig({section:'sources', biz:setBiz, sources:srcs}, 'msgSrc', function(){ if(currentBiz===setBiz) loadSources(false); });
+}
+// 현재 화면에서 편집 중인 원천사 목록을 엑셀(.xlsx)로 내려받기.
+//  - '현재설정' 시트: 지금 화면 값 그대로 (저장 안 해도 됨)
+//  - 'DB참고'   시트: 서버가 DB(oracle)를 읽기전용 조회한 참고자료 (실패하면 비워둠, config 은 안 건드림)
+function exportSourcesXlsx(){
+  var srcs=collectSources();
+  if(!srcs.length){ setMsg('msgSrc','내보낼 원천사가 없습니다.',true); return; }
+  setMsg('msgSrc','엑셀 생성 중... (DB 참고자료 조회 포함)',false);
+  fetch('/api/export/sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({biz:setBiz,sources:srcs})})
+    .then(function(r){ if(!r.ok) return r.json().then(function(j){throw new Error(j.error||('HTTP '+r.status));}); return r.blob(); })
+    .then(function(blob){
+      var url=URL.createObjectURL(blob), a=document.createElement('a');
+      a.href=url; a.download='sources_'+(setBiz||'export')+'_'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'.xlsx';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+      setMsg('msgSrc','엑셀 내려받기 완료 (현재설정 + DB참고).',false);
+    })
+    .catch(function(e){ setMsg('msgSrc','엑셀 생성 실패: '+e.message,true); });
 }
 function saveServers(){
   var svs=collectServers();

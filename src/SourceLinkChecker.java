@@ -162,6 +162,7 @@ public class SourceLinkChecker {
             server.createContext("/api/check", new CheckHandler());
             server.createContext("/api/checkall", new CheckAllHandler());
             server.createContext("/api/config", new ConfigHandler());
+            server.createContext("/api/export/sources", new ExportHandler());
             server.setExecutor(Executors.newFixedThreadPool(12));
             server.start();
 
@@ -1939,6 +1940,214 @@ public class SourceLinkChecker {
         OutputStream os = ex.getResponseBody();
         os.write(body);
         os.close();
+    }
+
+    // ---------------------------------------------------------------------
+    // 엑셀(.xlsx) 내보내기 — 설정 화면의 '원천사 목록'을 그대로 파일로.
+    //   화면에서 편집 중인 목록(sends/recvs)을 POST 로 받아 xlsx 바이트로 반환.
+    //   OpenXML(.xlsx) 을 순수 Java(java.util.zip) 로 직접 생성 — 외부 라이브러리 없음.
+    //   모든 셀을 inlineStr(텍스트) 로 써서 "001" 같은 앞자리 0/포트가 보존된다.
+    // ---------------------------------------------------------------------
+    static class ExportHandler implements HttpHandler {
+        public void handle(HttpExchange ex) throws IOException {
+            try {
+                if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+                    sendJson(ex, 405, "{\"error\":\"POST only\"}"); return;
+                }
+                Map<String, Object> req = asMap(Json.parse(readBody(ex)));
+                String biz = str(req.get("biz"), "sources");
+                List<Object> srcs = asList(req.get("sources"));
+                String[] headers = { "원천사ID", "원천사명", "구분", "라벨", "송신IP", "송신Port", "수신Port", "방식", "예상세션수" };
+
+                // (1) 현재설정 시트: 화면에서 편집 중인 값 그대로(요청 JSON) — 저장 여부 무관
+                List<String[]> cfgRows = new ArrayList<String[]>();
+                for (Object so : srcs) {
+                    Map<String, Object> s = asMap(so);
+                    String id = str(s.get("id"), "");
+                    String name = str(s.get("name"), "");
+                    List<Object> sends = asList(s.get("sends"));
+                    List<Object> recvs = asList(s.get("recvs"));
+                    if (sends.isEmpty() && recvs.isEmpty()) {
+                        cfgRows.add(new String[]{ id, name, "", "", "", "", "", "", "" });
+                    }
+                    for (Object eo : sends) {
+                        Map<String, Object> e = asMap(eo);
+                        int exp = (int) num(e.get("expectSend"), 0);
+                        cfgRows.add(new String[]{ id, name, "송신",
+                            str(e.get("label"), ""), str(e.get("sendip"), ""), str(e.get("sendport"), ""),
+                            "", modeKoExport(str(e.get("checkMode"), "session")), exp > 0 ? String.valueOf(exp) : "" });
+                    }
+                    for (Object eo : recvs) {
+                        Map<String, Object> e = asMap(eo);
+                        int exp = (int) num(e.get("expectRecv"), 0);
+                        cfgRows.add(new String[]{ id, name, "수신",
+                            str(e.get("label"), ""), "", "", str(e.get("recvport"), ""),
+                            "수신 대기(LISTEN)", exp > 0 ? String.valueOf(exp) : "" });
+                    }
+                }
+
+                // (2) DB참고 시트: 읽기 전용 조회 참고자료. 실패/미설정이면 비워둠.
+                //     ★ config/cache 를 절대 갱신하지 않는다 — resolveSources/saveCache/saveConfigFile 미사용.
+                //        오직 querySources(oracle) 만 호출(SELECT 만 수행, 상태 변경 없음).
+                List<String[]> dbRows = new ArrayList<String[]>();
+                String dbNote = "";
+                try {
+                    Map<String, Object> bizCfg = bizById(biz);
+                    if (bizCfg == null) {
+                        dbNote = "업무(" + biz + ")를 config 에서 찾을 수 없음";
+                    } else {
+                        Map<String, Object> oracle = asMap(bizCfg.get("oracle"));
+                        String sql = str(oracle.get("sourcesSql"), "").trim();
+                        if (sql.isEmpty()) dbNote = "DB 조회 SQL(oracle.sourcesSql) 미설정";
+                        else dbRows = rowsFromSrcList(querySources(oracle));   // 읽기 전용
+                    }
+                } catch (Throwable t) {
+                    dbRows = new ArrayList<String[]>();                        // 실패 시 그냥 pass — 비워둠
+                    dbNote = "DB 조회 실패: " + rootMsg(t);
+                    System.out.println("[export] DB 참고자료 조회 실패(스킵, config 무변경): " + rootMsg(t));
+                }
+                if (dbRows.isEmpty() && !dbNote.isEmpty()) {
+                    dbRows.add(new String[]{ "(참고자료 비어있음) " + dbNote, "", "", "", "", "", "", "", "" });
+                }
+
+                List<XSheet> sheets = new ArrayList<XSheet>();
+                sheets.add(new XSheet("현재설정", headers, cfgRows));
+                sheets.add(new XSheet("DB참고", headers, dbRows));
+
+                byte[] xlsx = buildXlsx(sheets);
+                String fname = "sources_" + biz.replaceAll("[^A-Za-z0-9_-]", "") + "_"
+                             + java.time.LocalDate.now().toString().replace("-", "") + ".xlsx";
+                ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + fname + "\"");
+                send(ex, 200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx);
+            } catch (Exception e) {
+                sendJson(ex, 500, "{\"error\":" + jstr("엑셀 생성 실패: " + rootMsg(e)) + "}");
+            }
+        }
+    }
+
+    private static String modeKoExport(String m) {
+        return "skip".equals(m) ? "제외(비연결)" : "세션(연결유지)";
+    }
+
+    /** Src 목록(endpoints) -> 엑셀 행. 송신/수신을 각 행으로 평탄화(현재설정 시트와 동일 컬럼). */
+    private static List<String[]> rowsFromSrcList(List<Src> list) {
+        List<String[]> rows = new ArrayList<String[]>();
+        for (Src s : list) {
+            List<Ep> sends = sendsOf(s), recvs = recvsOf(s);
+            if (sends.isEmpty() && recvs.isEmpty()) rows.add(new String[]{ s.id, s.name, "", "", "", "", "", "", "" });
+            for (Ep e : sends) rows.add(new String[]{ s.id, s.name, "송신",
+                e.label, e.sendip, e.sendport, "", modeKoExport(e.checkMode), e.expectSend > 0 ? String.valueOf(e.expectSend) : "" });
+            for (Ep e : recvs) rows.add(new String[]{ s.id, s.name, "수신",
+                e.label, "", "", e.recvport, "수신 대기(LISTEN)", e.expectRecv > 0 ? String.valueOf(e.expectRecv) : "" });
+        }
+        return rows;
+    }
+
+    /** 엑셀 시트 1개(이름/헤더/행). */
+    static class XSheet {
+        final String name; final String[] headers; final List<String[]> rows;
+        XSheet(String name, String[] headers, List<String[]> rows) { this.name = name; this.headers = headers; this.rows = rows; }
+    }
+
+    /** 여러 시트를 최소 구조의 .xlsx(zip) 바이트로 생성. 모든 셀은 텍스트(inlineStr) — 앞자리 0 보존. */
+    private static byte[] buildXlsx(List<XSheet> sheets) throws IOException {
+        StringBuilder sheetsTag = new StringBuilder();      // workbook.xml <sheets>
+        StringBuilder wbRels = new StringBuilder();         // workbook.xml.rels
+        StringBuilder ctOverrides = new StringBuilder();    // [Content_Types].xml overrides
+        String[] sheetXmls = new String[sheets.size()];
+
+        for (int i = 0; i < sheets.size(); i++) {
+            XSheet sh = sheets.get(i);
+            int n = i + 1;
+            StringBuilder sd = new StringBuilder();
+            sd.append(xlsxRow(1, sh.headers));
+            for (int r = 0; r < sh.rows.size(); r++) sd.append(xlsxRow(r + 2, sh.rows.get(r)));
+            sheetXmls[i] =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+                "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
+                "<sheetData>" + sd + "</sheetData></worksheet>";
+            sheetsTag.append("<sheet name=\"").append(xmlEsc(sh.name)).append("\" sheetId=\"").append(n)
+                     .append("\" r:id=\"rId").append(n).append("\"/>");
+            wbRels.append("<Relationship Id=\"rId").append(n)
+                  .append("\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet")
+                  .append(n).append(".xml\"/>");
+            ctOverrides.append("<Override PartName=\"/xl/worksheets/sheet").append(n)
+                       .append(".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>");
+        }
+
+        String workbookXml =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" " +
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+            "<sheets>" + sheetsTag + "</sheets></workbook>";
+        String workbookRels =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            wbRels + "</Relationships>";
+        String rootRels =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>" +
+            "</Relationships>";
+        String contentTypes =
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+            "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
+            "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
+            "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>" +
+            ctOverrides + "</Types>";
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(bos);
+        zip.setLevel(9);
+        putZip(zip, "[Content_Types].xml", contentTypes);
+        putZip(zip, "_rels/.rels", rootRels);
+        putZip(zip, "xl/workbook.xml", workbookXml);
+        putZip(zip, "xl/_rels/workbook.xml.rels", workbookRels);
+        for (int i = 0; i < sheetXmls.length; i++) putZip(zip, "xl/worksheets/sheet" + (i + 1) + ".xml", sheetXmls[i]);
+        zip.close();
+        return bos.toByteArray();
+    }
+
+    private static void putZip(java.util.zip.ZipOutputStream zip, String name, String content) throws IOException {
+        zip.putNextEntry(new java.util.zip.ZipEntry(name));
+        zip.write(content.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
+    }
+
+    private static String xlsxRow(int rowNum, String[] cells) {
+        StringBuilder sb = new StringBuilder("<row r=\"" + rowNum + "\">");
+        for (int c = 0; c < cells.length; c++) {
+            String v = cells[c] == null ? "" : cells[c];
+            sb.append("<c r=\"").append(xlsxColRef(c)).append(rowNum).append("\" t=\"inlineStr\">")
+              .append("<is><t xml:space=\"preserve\">").append(xmlEsc(v)).append("</t></is></c>");
+        }
+        return sb.append("</row>").toString();
+    }
+
+    /** 0-based 컬럼 인덱스 -> A, B, ... Z, AA, ... (bijective base-26). */
+    private static String xlsxColRef(int idx0) {
+        StringBuilder s = new StringBuilder();
+        int n = idx0;
+        do { s.insert(0, (char) ('A' + (n % 26))); n = n / 26 - 1; } while (n >= 0);
+        return s.toString();
+    }
+
+    private static String xmlEsc(String s) {
+        if (s == null) return "";
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '&': b.append("&amp;"); break;
+                case '<': b.append("&lt;"); break;
+                case '>': b.append("&gt;"); break;
+                case '"': b.append("&quot;"); break;
+                case '\'': b.append("&apos;"); break;
+                default: b.append(c);
+            }
+        }
+        return b.toString();
     }
 
     private static String param(String rawQuery, String key) {
