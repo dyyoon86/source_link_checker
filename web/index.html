@@ -716,7 +716,7 @@ function render(d){
   var sendApp = sendApplicableOf(s), recvApp = recvApplicableOf(s);
   var sNeed=sendNeedOf(s), rNeed=recvNeedOf(s);
   var sSt=d.sendState||(!sendApp?'na':(sendTotal===0?'absent':(sNeed>0?(sendTotal===sNeed?'ok':(sendTotal>sNeed?'excess':'short')):'ok')));
-  var rSt=d.recvState||(!recvApp?'na':(recvTotal===0?'absent':(rNeed>0?(recvTotal===rNeed?'ok':(recvTotal>rNeed?'excess':'short')):'ok')));
+  var rSt=d.recvState||(!recvApp?'na':(rNeed>0?(recvTotal===0?'absent':(recvTotal===rNeed?'ok':(recvTotal>rNeed?'excess':'short'))):(recvTotal>0?'ok':'absent')));
   html+='<div class="summary">'+
         (sendApp ? tileFracState('송신 세션 (실제/설정)', sendTotal, sNeed, sSt) : tileTxt('송신', '해당없음', 'mut'))+
         (recvApp ? (rNeed>0 ? tileFracState('수신 세션 (실제/설정)', recvTotal, rNeed, rSt) : tileNum('수신 세션', recvTotal, recvTotal>0?'ok':'warn')) : tileTxt('수신', '해당없음', 'mut'))+
@@ -1112,7 +1112,7 @@ function fillBulk(d){
     var anyListen=false; for(var li=0;li<per.length;li++){ if(per[li].ok && per[li].recvListening) anyListen=true; }
     // 축 상태: ok(정확)/excess(초과 노랑)/short(부족 주황)/absent(없음 빨강). 백엔드 state 우선, 없으면 합산 계산.
     var sSt = r.sendState || (!sHasSend?'na':(sT===0?'absent':(sNd>0?(sT===sNd?'ok':(sT>sNd?'excess':'short')):'ok')));
-    var rSt = r.recvState || (!rHasRecv?'na':(!anyListen?'absent':(rNd>0?(rT===rNd?'ok':(rT>rNd?'excess':'short')):'ok')));
+    var rSt = r.recvState || (!rHasRecv?'na':(rNd>0?(rT===0?'absent':(rT===rNd?'ok':(rT>rNd?'excess':'short'))):(anyListen?'ok':'absent')));
     var stCls=function(s){ return s==='ok'?'ok':(s==='excess'?'excess':(s==='short'?'short':(s==='absent'?'no':'mut'))); };
     // 원천사별 합계 (실제/설정). 초과/부족이면 노랑.
     var totCell=tr.querySelector('[data-tot]');

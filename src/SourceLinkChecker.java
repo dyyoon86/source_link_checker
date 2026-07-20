@@ -1500,9 +1500,16 @@ public class SourceLinkChecker {
             int exp = b[0], total = b[1], lis = b[2];
             st.recvTotal += total; st.recvNeed += (exp > 0 ? exp : 0);
             int state;
-            if (lis == 0) state = 3;                                // 닫힘/없음
-            else if (exp > 0) state = (total == exp) ? 0 : (total > exp ? 1 : 2);
-            else state = 0;                                         // 미지정: 리슨이면 정상
+            if (exp > 0) {
+                // 예상 세션수가 있으면 '붙은 세션수' 기준: 0개=장애, 정확=정상, 많음=초과, 적음=부족
+                if (total == 0) state = 3;                          // 아무도 안 붙음 = 장애(빨강)
+                else if (total == exp) state = 0;
+                else if (total > exp) state = 1;                    // 초과
+                else state = 2;                                     // 부족
+            } else {
+                // 미지정: LISTEN(대기)만 확인
+                state = (lis == 1) ? 0 : 3;
+            }
             if (state == 0) rOk++; else if (state == 1) rExc++; else if (state == 2) rSht++; else rAbs++;
             rN++;
         }
