@@ -256,6 +256,9 @@
   .btable .cb{width:36px;text-align:center;}
   .btable input[type=checkbox]{width:16px;height:16px;accent-color:var(--orange-strong);cursor:pointer;}
   .btable .nm{font-weight:600;color:var(--text-1);}
+  .btable .srcid{display:inline-block;margin-left:6px;font-family:var(--mono);font-size:11px;
+                 color:var(--text-4);background:var(--neutral-5);border:1px solid var(--line);
+                 border-radius:var(--r-sm);padding:0 5px;vertical-align:1px;}
   .btable .mono{font-family:var(--mono);color:var(--text-2);}
   .btable .st{white-space:nowrap;font-weight:600;}
   .btable .st .frac{font-family:var(--mono);}
@@ -388,8 +391,7 @@
   <div class="tabs" id="tabs"></div>
 
   <div class="viewtoggle">
-    <button class="vt active" id="vtSingle">단건 조회</button>
-    <button class="vt" id="vtBulk">전체 조회</button>
+    <button class="vt active" id="vtBulk">전체 조회</button>
     <button class="vt" id="vtHistory">조회 이력</button>
     <button class="vt" id="vtSettings">설정</button>
   </div>
@@ -398,8 +400,8 @@
   <div class="updated" id="updated"></div>
   <div class="sshbar" id="sshbar"></div>
 
-  <!-- 단건 조회 -->
-  <div id="singleView">
+  <!-- 단건 조회 (메뉴에서 제외됨 — 전체 조회의 행 클릭 상세로 대체. 재갱신 로직 재사용 위해 숨김 유지) -->
+  <div id="singleView" style="display:none">
     <div class="control">
       <div class="field">
         <label>원천사</label>
@@ -411,8 +413,8 @@
     <div id="result"></div>
   </div>
 
-  <!-- 전체 조회 -->
-  <div id="bulkView" style="display:none">
+  <!-- 전체 조회 (기본 화면) -->
+  <div id="bulkView">
     <div class="control" style="flex-wrap:wrap">
       <div style="font-size:13px;color:var(--text-3)" id="bulkInfo">원천사 목록</div>
       <div style="flex:1;min-width:12px"></div>
@@ -455,19 +457,17 @@ var envInfo = {};       // {name,tag,color}
 var bizMap = {};        // id -> {name,dbUrl,dbUser}
 var currentSources = [];// 현재 업무의 원천사 목록 (단건 드롭다운/전체 테이블 공용)
 var currentServers = [];// 현재 업무의 서버 목록 [{serverId,host}] (전체 조회 컬럼용)
-var currentView = 'single';
+var currentView = 'bulk';
 var autoTimer = null;   // 자동 점검 타이머
 var statusSnapshot = {};// 직전 종합상태 스냅샷 (id -> ok/warn/bad) — 변화 감지용
 var curOverall = {};    // 이번 fillBulk 의 종합상태
 
 // 뷰 토글
-$('vtSingle').onclick = function(){ setView('single'); };
 $('vtBulk').onclick   = function(){ setView('bulk'); };
 $('vtHistory').onclick= function(){ setView('history'); };
 $('vtSettings').onclick= function(){ setView('settings'); };
 function setView(v){
   currentView = v;
-  $('vtSingle').className = 'vt' + (v==='single'?' active':'');
   $('vtBulk').className   = 'vt' + (v==='bulk'?' active':'');
   $('vtHistory').className= 'vt' + (v==='history'?' active':'');
   $('vtSettings').className= 'vt' + (v==='settings'?' active':'');
@@ -929,7 +929,7 @@ function renderBulkTable(){
     cells += '<td class="svrcell tot" data-tot>-</td>';
     h+='<tr class="clickable" data-id="'+esc(s.id)+'" title="클릭하면 서버별 소켓 상세">'+
        '<td class="cb"><input type="checkbox" class="cbRow" checked></td>'+
-       '<td><span class="rowdot" data-dot></span><span class="nm">'+esc(s.name||s.id)+'</span></td>'+
+       '<td><span class="rowdot" data-dot></span><span class="nm">'+esc(s.name||s.id)+'</span><span class="srcid">'+esc(s.id)+'</span></td>'+
        '<td class="mono">'+bulkEpText(s)+'</td>'+ cells +'</tr>';
   }
   // 서버별 합계 푸터
@@ -1486,6 +1486,7 @@ function esc(s){ return String(s==null?'':s)
 
 loadEnv();
 loadBusinesses();
+setView('bulk');   // 기본 화면 = 전체 조회 (플로팅 조회버튼 표시 + 테이블 구성)
 </script>
 </body>
 </html>
