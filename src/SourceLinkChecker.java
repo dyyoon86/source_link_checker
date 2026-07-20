@@ -1455,19 +1455,26 @@ public class SourceLinkChecker {
         LinkedHashMap<String, int[]> recvAgg = new LinkedHashMap<String, int[]>();
         for (CheckResult r : results) {
             if (!r.ok) { st.errCnt++; continue; }
+            // 같은 서버 안에서 동일 키(sendip:sendport / recvport)는 세션수를 한 번만 합산(중복 줄 방지).
+            java.util.Set<String> seenSend = new java.util.HashSet<String>();
+            java.util.Set<String> seenRecv = new java.util.HashSet<String>();
             for (EpResult er : r.eps) {
                 if (er.sendChecked()) {
                     String k = er.sendip + ":" + er.sendport;
+                    int expThis = er.isProbe() ? 0 : (er.expectSend > 0 ? er.expectSend : -1);
                     int[] a = sendAgg.get(k);
-                    if (a == null) sendAgg.put(k, a = new int[]{ er.isProbe() ? 0 : (er.expectSend > 0 ? er.expectSend : -1), 0, er.isProbe() ? 1 : 0 });
-                    a[1] += er.sendCount;
+                    if (a == null) sendAgg.put(k, a = new int[]{ expThis, 0, er.isProbe() ? 1 : 0 });
+                    else { if (expThis > 0) a[0] = (a[0] > 0 ? Math.max(a[0], expThis) : expThis); if (er.isProbe()) a[2] = 1; }
+                    if (seenSend.add(k)) a[1] += er.sendCount;   // 서버당 같은 키 1회만
                 }
                 if (er.hasRecv()) {
-                    int[] b = recvAgg.get(er.recvport);
-                    if (b == null) recvAgg.put(er.recvport, b = new int[]{ er.expectRecv > 0 ? er.expectRecv : -1, 0, 0 });
-                    if (er.expectRecv > 0) b[0] = Math.max(b[0] < 0 ? 0 : b[0], er.expectRecv);
-                    b[1] += er.recvEstabCount;
+                    String p = er.recvport;
+                    int expThis = er.expectRecv > 0 ? er.expectRecv : -1;
+                    int[] b = recvAgg.get(p);
+                    if (b == null) recvAgg.put(p, b = new int[]{ expThis, 0, 0 });
+                    else if (expThis > 0) b[0] = (b[0] > 0 ? Math.max(b[0], expThis) : expThis);
                     if (er.recvListening) b[2] = 1;
+                    if (seenRecv.add(p)) b[1] += er.recvEstabCount;   // 서버당 같은 포트 1회만
                 }
             }
         }

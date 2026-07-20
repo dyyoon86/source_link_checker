@@ -30,6 +30,11 @@
     --amber: #D54000;
     --amber-5: #FFEFE7;
     --amber-20: #FFCFBD;
+    /* 상태 '주의' = 노란색 (초과/부족/일부/실패) */
+    --warn: #F5B301;          /* 노랑 */
+    --warn-5: #FFF8E1;
+    --warn-20: #FCE4A6;
+    --warn-text: #9A6A00;
     --neutral-5: #F6F6F9;
     --disabled: #D1D1D5;
     --r-sm:4px; --r-md:8px; --r-lg:12px; --r-base:16px;
@@ -126,7 +131,7 @@
   .tile .t-val{font-size:26px;font-weight:700;letter-spacing:-0.03em;}
   .tile .t-val small{font-size:15px;color:var(--text-4);font-weight:500;}
   .tile.ok .t-val{color:var(--green-text);}
-  .tile.warn .t-val{color:var(--amber);}
+  .tile.warn .t-val{color:var(--warn-text);}
   .tile.bad .t-val{color:var(--red-text);}
 
   /* Server grid */
@@ -157,7 +162,7 @@
   .status .dot{width:9px;height:9px;border-radius:99px;flex:none;}
   .s-ok{color:var(--green-text);}   .s-ok .dot{background:var(--green);box-shadow:0 0 0 3px var(--green-5);}
   .s-bad{color:var(--red-text);}    .s-bad .dot{background:var(--red);box-shadow:0 0 0 3px var(--red-5);}
-  .s-warn{color:var(--amber);}      .s-warn .dot{background:var(--orange);box-shadow:0 0 0 3px var(--amber-5);}
+  .s-warn{color:var(--warn-text);}  .s-warn .dot{background:var(--warn);box-shadow:0 0 0 3px var(--warn-5);}
   .s-mut{color:var(--text-4);}      .s-mut .dot{background:var(--text-4);}
 
   .row-detail{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -249,9 +254,9 @@
   .btable .mono{font-family:var(--mono);color:var(--text-2);}
   .btable .st{white-space:nowrap;font-weight:600;}
   .btable .st .frac{font-family:var(--mono);}
-  .st.ok{color:var(--green-text);} .st.warn{color:var(--amber);} .st.bad{color:var(--red-text);} .st.mut{color:var(--text-4);}
+  .st.ok{color:var(--green-text);} .st.warn{color:var(--warn-text);} .st.bad{color:var(--red-text);} .st.mut{color:var(--text-4);}
   .btable .rowdot{display:inline-block;width:9px;height:9px;border-radius:99px;background:var(--text-4);margin-right:2px;}
-  .rowdot.ok{background:var(--green);} .rowdot.warn{background:var(--orange);} .rowdot.bad{background:var(--red);}
+  .rowdot.ok{background:var(--green);} .rowdot.warn{background:var(--warn);} .rowdot.bad{background:var(--red);}
   .btable td.errcell{color:var(--red-text);font-size:12px;}
   .bwrap-scroll{overflow-x:auto;}
   .btable th.svr{text-align:center;white-space:nowrap;}
@@ -260,7 +265,7 @@
     border-radius:var(--r-sm);padding:2px 6px;margin:0 2px;border:1px solid var(--line);}
   .mini.ok{background:var(--green-5);color:var(--green-text);border-color:var(--green-20);}
   .mini.no{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
-  .mini.warn{background:var(--amber-5);color:var(--amber);border-color:var(--amber-20);}
+  .mini.warn{background:var(--warn-5);color:var(--warn-text);border-color:var(--warn-20);}
   .mini.mut{background:var(--neutral-5);color:var(--text-4);}
   .mini.err{background:var(--red-5);color:var(--red-text);border-color:var(--red-20);}
   .mini.tt{background:var(--panel2,#eef1f5);background:#eef1f5;color:var(--text-2);border-color:var(--line);}
@@ -290,7 +295,7 @@
   /* 이력 상태 배지 */
   .hstat{font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;}
   .hstat.ok{background:var(--green-5);color:var(--green-text);border:1px solid var(--green-20);}
-  .hstat.warn{background:var(--orange-5);color:var(--orange-strong);border:1px solid var(--amber-20);}
+  .hstat.warn{background:var(--warn-5);color:var(--warn-text);border:1px solid var(--warn-20);}
   .hstat.bad{background:var(--red-5);color:var(--red-text);border:1px solid var(--red-20);}
   .hstat.mut{background:var(--neutral-5);color:var(--text-4);border:1px solid var(--line);}
   .hmode{font-size:11px;font-weight:600;border-radius:var(--r-sm);padding:2px 8px;background:var(--neutral-5);color:var(--text-3);border:1px solid var(--line);}
@@ -744,18 +749,28 @@ function tileFracState(lbl, cnt, need, state){
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
          '<div class="t-val">'+cnt+' <small>/ '+(need>0?need:'-')+'</small></div></div>';
 }
-// 설정(기대) 세션수 합계
-function sendNeedOf(s){ var a=sendsOf(s),n=0; for(var i=0;i<a.length;i++){ var e=a[i]; if(e.checkMode==='skip')continue; n+=(e.expectSend>0?e.expectSend:1); } return n; }
-function recvNeedOf(s){ var a=recvsOf(s),n=0; for(var i=0;i<a.length;i++){ n+=(a[i].expectRecv>0?a[i].expectRecv:0); } return n; }
+// 설정(기대) 세션수 합계 — 같은 키(sendip:sendport / recvport)는 중복 줄이어도 한 번만(명시값 최대)
+function sendNeedOf(s){
+  var a=sendsOf(s), byKey={};
+  for(var i=0;i<a.length;i++){ var e=a[i]; if(e.checkMode==='skip')continue;
+    var k=(e.sendip||'')+':'+(e.sendport||''); byKey[k]=Math.max(byKey[k]||0, (e.expectSend>0?e.expectSend:0)); }
+  var n=0; for(var k in byKey){ n+=(byKey[k]>0?byKey[k]:1); } return n;
+}
+function recvNeedOf(s){
+  var a=recvsOf(s), byKey={};
+  for(var i=0;i<a.length;i++){ var k=a[i].recvport||''; byKey[k]=Math.max(byKey[k]||0, (a[i].expectRecv>0?a[i].expectRecv:0)); }
+  var n=0; for(var k in byKey){ n+=(byKey[k]>0?byKey[k]:0); } return n;
+}
 // 종합 상태 배지
 function statusPill(st){
   st=st||'mut';
   var ko = st==='ok'?'정상':(st==='bad'?'장애':(st==='warn'?'주의':'점검없음'));
-  var col = st==='ok'?'var(--green-text)':(st==='bad'?'var(--red-text)':(st==='warn'?'var(--amber)':'var(--text-4)'));
-  var bg = st==='ok'?'var(--green-5)':(st==='bad'?'var(--red-5)':(st==='warn'?'var(--amber-5)':'var(--neutral-5)'));
+  var col = st==='ok'?'var(--green-text)':(st==='bad'?'var(--red-text)':(st==='warn'?'var(--warn-text)':'var(--text-4)'));
+  var bg = st==='ok'?'var(--green-5)':(st==='bad'?'var(--red-5)':(st==='warn'?'var(--warn-5)':'var(--neutral-5)'));
+  var dotc = st==='ok'?'var(--green)':(st==='bad'?'var(--red)':(st==='warn'?'var(--warn)':'var(--text-4)'));
   return '<div style="margin-top:14px;display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;'+
     'background:'+bg+';color:'+col+';font-weight:700;font-size:15px">'+
-    '<span style="width:10px;height:10px;border-radius:99px;background:'+col+'"></span>종합 상태: '+ko+'</div>';
+    '<span style="width:10px;height:10px;border-radius:99px;background:'+dotc+'"></span>종합 상태: '+ko+'</div>';
 }
 function tileNum(lbl, n, klass){
   return '<div class="tile '+klass+'"><div class="t-lbl">'+lbl+'</div>'+
@@ -917,7 +932,7 @@ function renderBulkTable(){
   h+='<div class="updated" style="margin-top:10px;flex-direction:column;align-items:flex-start;gap:6px">'+
      '<div><b>종합 상태(원천사 앞 점)</b> : '+
        '<span class="rowdot ok"></span> <span style="color:var(--green-text)">정상</span> — 실제 세션수가 설정과 <b>정확히 일치</b> · '+
-       '<span class="rowdot warn"></span> <span style="color:var(--amber)">주의</span> — <b>부족하거나 초과</b>(설정≠실제), 일부만 정상, 또는 서버 점검 실패 · '+
+       '<span class="rowdot warn"></span> <span style="color:var(--warn-text)">주의(노랑)</span> — <b>부족하거나 초과</b>(설정≠실제), 일부만 정상, 또는 서버 점검 실패 · '+
        '<span class="rowdot bad"></span> <span style="color:var(--red-text)">장애</span> — 세션 <b>전혀 없음</b> · '+
        '<span class="rowdot"></span> <span style="color:var(--text-4)">점검없음</span> — 점검 대상 아님</div>'+
      '<div><b>셀/합계</b> : <span class="mini ok">송·N</span> 정상 · <span class="mini warn">송·2/3</span> 부족·초과(설정과 다름) · <span class="mini no">수·N</span> 없음/닫힘 · <span class="mini mut">송·-</span> 제외 · <span class="mini err">⚠</span> 서버 점검 실패</div>'+
